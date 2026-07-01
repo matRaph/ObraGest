@@ -13,7 +13,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-slate-50">
       <header className="bg-slate-900 text-white shadow">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-bold tracking-tight">ObraGest</h1>
+          <Link to="/" className="text-xl font-bold tracking-tight hover:opacity-90">
+            ObraGest
+          </Link>
           <nav className="flex gap-4">
             {links.map((link) => (
               <Link

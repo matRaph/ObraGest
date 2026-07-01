@@ -45,6 +45,9 @@ class Categoria(models.Model):
     class Meta:
         ordering = ["nome"]
         verbose_name_plural = "categorias"
+        constraints = [
+            models.UniqueConstraint(fields=["nome", "tipo"], name="unique_categoria_nome_tipo"),
+        ]
 
     def __str__(self) -> str:
         return self.nome

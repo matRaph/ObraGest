@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { dashboardApi, formatCurrency } from "../api/client";
+import { dashboardApi, formatCurrency, tipoLabels } from "../api/client";
 
 export default function DashboardPage() {
   const [dataInicio, setDataInicio] = useState("");
@@ -133,7 +133,9 @@ export default function DashboardPage() {
                     <tr key={item.categoria_id} className="border-t">
                       <td className="py-2">
                         {item.nome}{" "}
-                        <span className="text-xs text-slate-400">({item.tipo})</span>
+                        <span className="text-xs text-slate-400">
+                          ({tipoLabels[item.tipo] ?? item.tipo})
+                        </span>
                       </td>
                       <td className="py-2 text-right font-medium">{formatCurrency(item.total)}</td>
                     </tr>

@@ -22,6 +22,7 @@ export const obrasApi = {
   update: (id: string, data: Partial<Obra>) =>
     api.patch<Obra>(`/obras/${id}/`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/obras/${id}/`),
+  cidades: () => api.get<string[]>("/obras/cidades/").then((r) => r.data),
 };
 
 export const operacoesApi = {
@@ -72,4 +73,9 @@ export const statusLabels: Record<string, string> = {
   em_andamento: "Em andamento",
   concluida: "Concluída",
   pausada: "Pausada",
+};
+
+export const tipoLabels: Record<string, string> = {
+  despesa: "Despesa",
+  receita: "Receita",
 };

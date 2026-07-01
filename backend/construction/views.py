@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.db.models import Case, DecimalField, F, Sum, Value, When
+from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
 from django.db.models.functions import Coalesce
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -19,8 +19,20 @@ from .services.backup import create_backup, list_backups, restore_backup
 
 
 class CategoriaViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Categoria.objects.filter(ativa=True)
     serializer_class = CategoriaSerializer
+
+    def get_queryset(self):
+        return (
+            Categoria.objects.filter(ativa=True)
+            .annotate(
+                tipo_order=Case(
+                    When(tipo=TipoOperacao.DESPESA, then=Value(0)),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by("tipo_order", "nome")
+        )
 
 
 class ObraViewSet(viewsets.ModelViewSet):
@@ -77,6 +89,15 @@ class ObraViewSet(viewsets.ModelViewSet):
         if self.action == "retrieve":
             return ObraDetailSerializer
         return ObraListSerializer
+
+    @action(detail=False, methods=["get"])
+    def cidades(self, request):
+        cidades = (
+            Obra.objects.values_list("cidade", flat=True)
+            .distinct()
+            .order_by("cidade")
+        )
+        return Response(list(cidades))
 
     @action(detail=True, methods=["get", "post"])
     def operacoes(self, request, pk=None):
@@ -232,9 +253,17 @@ class DashboardView(APIView):
                 "saldo": total_receitas - total_despesas,
                 "por_obra": list(por_obra.values()),
                 "por_cidade": list(por_cidade.values()),
-                "por_categoria": list(por_categoria.values()),
+                "por_categoria": sorted(
+                    por_categoria.values(),
+                    key=lambda x: (0 if x["tipo"] == TipoOperacao.DESPESA else 1, x["nome"]),
+                ),
             }
         )
+
+
+class HealthView(APIView):
+    def get(self, request):
+        return Response({"status": "ok"})
 
 
 class BackupView(APIView):

@@ -5,6 +5,7 @@ from .views import (
     BackupView,
     CategoriaViewSet,
     DashboardView,
+    HealthView,
     ObraViewSet,
     OperacaoViewSet,
     RestoreBackupView,
@@ -17,6 +18,7 @@ router.register("categorias", CategoriaViewSet, basename="categoria")
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("health/", HealthView.as_view(), name="health"),
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
     path("backup/", BackupView.as_view(), name="backup"),
     path("backup/restore/", RestoreBackupView.as_view(), name="backup-restore"),

@@ -8,7 +8,9 @@ import {
   obrasApi,
   operacoesApi,
   statusLabels,
+  tipoLabels,
 } from "../api/client";
+import CategoriaSelect from "../components/CategoriaSelect";
 
 export default function ObraDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -85,7 +87,10 @@ export default function ObraDetailPage() {
       <div className="mb-6 rounded-lg border bg-white p-6 shadow-sm">
         <h2 className="text-2xl font-semibold">{obra.nome}</h2>
         <p className="text-slate-500">
-          {obra.cidade} · {statusLabels[obra.status]}
+          <span className="mr-2 inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+            {obra.cidade}
+          </span>
+          {statusLabels[obra.status]}
         </p>
         {obra.descricao && <p className="mt-2 text-sm text-slate-600">{obra.descricao}</p>}
         <div className="mt-4 grid grid-cols-3 gap-4">
@@ -142,19 +147,11 @@ export default function ObraDetailPage() {
           className="mb-4 rounded-lg border bg-white p-4 shadow-sm"
         >
           <div className="grid gap-3 md:grid-cols-2">
-            <select
-              required
+            <CategoriaSelect
               value={form.categoria}
-              onChange={(e) => setForm({ ...form, categoria: e.target.value })}
-              className="rounded border px-3 py-2"
-            >
-              <option value="">Selecione a categoria</option>
-              {categorias?.results.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.nome} ({cat.tipo})
-                </option>
-              ))}
-            </select>
+              onChange={(categoria) => setForm({ ...form, categoria })}
+              categorias={categorias?.results ?? []}
+            />
             <input
               required
               type="number"
@@ -208,7 +205,7 @@ export default function ObraDetailPage() {
                   <td className="px-4 py-3">{formatDate(op.data)}</td>
                   <td className="px-4 py-3">{op.categoria_nome}</td>
                   <td className="px-4 py-3">{op.descricao || "—"}</td>
-                  <td className="px-4 py-3 capitalize">{op.tipo}</td>
+                  <td className="px-4 py-3">{tipoLabels[op.tipo] ?? op.tipo}</td>
                   <td
                     className={`px-4 py-3 text-right font-medium ${
                       op.tipo === "receita" ? "text-green-600" : "text-red-600"

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { formatCurrency, obrasApi, statusLabels } from "../api/client";
+import CityInput from "../components/CityInput";
 import type { Obra, ObraStatus } from "../types";
 
 const statusOptions: ObraStatus[] = ["planejada", "em_andamento", "concluida", "pausada"];
@@ -29,6 +30,11 @@ export default function ObrasPage() {
     queryFn: () => obrasApi.list(params),
   });
 
+  const { data: cidades = [] } = useQuery({
+    queryKey: ["cidades"],
+    queryFn: () => obrasApi.cidades(),
+  });
+
   const createMutation = useMutation({
     mutationFn: () =>
       obrasApi.create({
@@ -37,6 +43,7 @@ export default function ObrasPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["obras"] });
+      queryClient.invalidateQueries({ queryKey: ["cidades"] });
       setShowForm(false);
       setForm({ nome: "", cidade: "", status: "planejada", data_inicio: "", descricao: "" });
     },
@@ -44,7 +51,10 @@ export default function ObrasPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => obrasApi.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["obras"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["obras"] });
+      queryClient.invalidateQueries({ queryKey: ["cidades"] });
+    },
   });
 
   return (
@@ -75,12 +85,12 @@ export default function ObrasPage() {
               onChange={(e) => setForm({ ...form, nome: e.target.value })}
               className="rounded border px-3 py-2"
             />
-            <input
+            <CityInput
               required
-              placeholder="Cidade"
               value={form.cidade}
-              onChange={(e) => setForm({ ...form, cidade: e.target.value })}
-              className="rounded border px-3 py-2"
+              onChange={(cidade) => setForm({ ...form, cidade })}
+              cities={cidades}
+              placeholder="Cidade"
             />
             <select
               value={form.status}
@@ -118,10 +128,11 @@ export default function ObrasPage() {
       )}
 
       <div className="mb-4 flex flex-wrap gap-3">
-        <input
-          placeholder="Filtrar por cidade"
+        <CityInput
           value={cidade}
-          onChange={(e) => setCidade(e.target.value)}
+          onChange={setCidade}
+          cities={cidades}
+          placeholder="Filtrar por cidade"
           className="rounded border px-3 py-2 text-sm"
         />
         <select
@@ -167,8 +178,10 @@ export default function ObrasPage() {
                   Excluir
                 </button>
               </div>
-              <p className="text-sm text-slate-500">{obra.cidade}</p>
-              <span className="mt-1 inline-block rounded bg-slate-100 px-2 py-0.5 text-xs">
+              <span className="mt-1 inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                {obra.cidade}
+              </span>
+              <span className="ml-1 mt-1 inline-block rounded bg-slate-100 px-2 py-0.5 text-xs">
                 {statusLabels[obra.status]}
               </span>
               <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
