@@ -9,35 +9,51 @@ Sistema local para gestão de custos de obras.
 
 ## Desenvolvimento com Docker (recomendado)
 
+Execute sempre na **raiz do projeto** (`ObraGest/`):
+
 ```bash
-docker compose up --build
+make up
+# ou: docker compose up --build
 ```
 
-- **App:** http://localhost:5173
+- **App:** http://localhost:3000
 - **API:** http://localhost:8000/api/
 
-O backend roda migrations e seed de categorias automaticamente ao iniciar. Os dados (SQLite e backups) ficam no volume `obragest_data`.
+O backend roda migrations e seed de categorias automaticamente **ao iniciar o container**. Os dados (SQLite e backups) ficam no volume `obragest_data`.
+
+### Hot reload
+
+| Alteração | Comportamento |
+|-----------|---------------|
+| `views.py`, `serializers.py`, frontend `.tsx` | Recarrega automaticamente (polling habilitado) |
+| `seed_categories.py` | Rode `make seed` |
+| `models.py` | Rode `make makemigrations` e `make migrate` |
+| `package.json` / dependências Python | Rode `make up` ou `docker compose up --build` |
+
+Para rebuild automático de dependências, use:
+
+```bash
+make up-watch
+# ou: docker compose watch
+```
 
 ### Comandos úteis
 
 ```bash
-# Rodar em background
-docker compose up -d --build
-
-# Ver logs
-docker compose logs -f
-
-# Parar
-docker compose down
-
-# Resetar banco de dados
-docker compose down -v
+make up              # subir tudo
+make up-watch        # subir com watch de dependências
+make logs            # ver logs do backend e frontend
+make seed            # reaplicar categorias padrão
+make makemigrations  # criar migrations
+make migrate         # aplicar migrations
+make down            # parar
+docker compose down -v   # parar e apagar banco
 ```
 
 ### Executar comandos Django no container
 
 ```bash
-docker compose exec backend python manage.py shell
+make shell
 docker compose exec backend python manage.py createsuperuser
 ```
 
@@ -76,5 +92,5 @@ npm run dev
 |----------|-----------|--------|
 | `OBRA_GEST_DATA_DIR` | Pasta dos dados (SQLite, backups) | `backend/` |
 | `DEBUG` | Modo debug | `true` |
-| `CORS_ALLOWED_ORIGINS` | Origens permitidas | `http://localhost:5173` |
+| `CORS_ALLOWED_ORIGINS` | Origens permitidas | `http://localhost:3000` |
 | `API_PROXY` | URL do backend para proxy do Vite (Docker) | `http://127.0.0.1:8000` |

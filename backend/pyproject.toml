@@ -9,6 +9,7 @@ dependencies = [
     "djangorestframework>=3.16.0",
     "python-dotenv>=1.2.2",
     "whitenoise>=6.9.0",
+    "watchfiles>=1.0.0",
 ]
 
 [dependency-groups]

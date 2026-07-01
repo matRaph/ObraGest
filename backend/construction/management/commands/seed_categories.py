@@ -11,8 +11,8 @@ CATEGORIAS_PADRAO = [
     ("Administrativo", TipoOperacao.DESPESA),
     ("Recebimento de cliente", TipoOperacao.RECEITA),
     ("Adiantamento", TipoOperacao.RECEITA),
-    ("Outros (despesa)", TipoOperacao.DESPESA),
-    ("Outros (receita)", TipoOperacao.RECEITA),
+    ("Outros", TipoOperacao.DESPESA),
+    ("Outros", TipoOperacao.RECEITA),
 ]
 
 

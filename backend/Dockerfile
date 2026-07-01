@@ -10,7 +10,8 @@ RUN pip install --no-cache-dir \
     "django-cors-headers>=4.9.0" \
     "djangorestframework>=3.16.0" \
     "python-dotenv>=1.2.2" \
-    "whitenoise>=6.9.0"
+    "whitenoise>=6.9.0" \
+    "watchfiles>=1.0.0"
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
