@@ -2,8 +2,22 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-COPY backend/requirements.txt .
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir \
+    "django>=6.0.6" \
+    "django-cors-headers>=4.9.0" \
+    "djangorestframework>=3.16.0" \
+    "python-dotenv>=1.2.2" \
+    "whitenoise>=6.9.0"
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8080"]
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+COPY . .
+
+EXPOSE 8000
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

@@ -1,38 +1,40 @@
 services:
-
-  postgres:
-    image: postgres:17
-    environment:
-      POSTGRES_DB: obraflow
-      POSTGRES_USER: obraflow
-      POSTGRES_PASSWORD: obraflow
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
   backend:
     build:
-      context: .
-      dockerfile: docker/backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     volumes:
       - ./backend:/app
+      - obragest_data:/app/data
     ports:
       - "8000:8000"
-    depends_on:
-      - postgres
+    environment:
+      - DEBUG=true
+      - OBRA_GEST_DATA_DIR=/app/data
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend
+      - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/categorias/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   frontend:
     build:
-      context: .
-      dockerfile: docker/frontend/Dockerfile
+      context: ./frontend
+      dockerfile: Dockerfile
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - frontend_node_modules:/app/node_modules
     ports:
       - "5173:5173"
+    environment:
+      - API_PROXY=http://backend:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
-  postgres_data:
+  obragest_data:
+  frontend_node_modules:
