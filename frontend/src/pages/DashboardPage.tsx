@@ -124,7 +124,7 @@ export default function DashboardPage() {
             <DateField
               value={dataInicio}
               onChange={setDataInicio}
-              className="rounded border px-3 py-2 text-sm"
+              className="text-sm"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm text-slate-600">
@@ -132,7 +132,7 @@ export default function DashboardPage() {
             <DateField
               value={dataFim}
               onChange={setDataFim}
-              className="rounded border px-3 py-2 text-sm"
+              className="text-sm"
             />
           </label>
           <button
