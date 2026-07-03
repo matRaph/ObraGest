@@ -13,6 +13,9 @@ logs:
 	docker compose logs -f backend frontend
 
 seed:
+	docker compose exec backend python manage.py seed
+
+seed-categories:
 	docker compose exec backend python manage.py seed_categories
 
 makemigrations:

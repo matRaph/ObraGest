@@ -54,12 +54,26 @@ class Command(BaseCommand):
     def _seed_defaults(self) -> int:
         created = 0
         for nome, tipo in CATEGORIAS_PADRAO:
-            _, was_created = Categoria.objects.get_or_create(
-                nome=nome,
-                tipo=tipo,
-                parent=None,
-                defaults={"padrao": True, "ativa": True},
+            if Categoria.objects.filter(
+                nome=nome, tipo=tipo, parent__isnull=True, ativa=True
+            ).exists():
+                continue
+
+            inativa = (
+                Categoria.objects.filter(
+                    nome=nome, tipo=tipo, parent__isnull=True, ativa=False
+                )
+                .order_by("id")
+                .first()
             )
-            if was_created:
-                created += 1
+            if inativa:
+                inativa.ativa = True
+                inativa.padrao = True
+                inativa.save(update_fields=["ativa", "padrao"])
+                continue
+
+            Categoria.objects.create(
+                nome=nome, tipo=tipo, parent=None, padrao=True, ativa=True
+            )
+            created += 1
         return created
