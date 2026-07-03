@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -10,24 +10,40 @@ import {
   statusLabels,
   tipoLabels,
 } from "../api/client";
-import CategoriaSelect from "../components/CategoriaSelect";
+import CategoriaSelect, { SubcategoriaSelect } from "../components/CategoriaSelect";
+import DateField from "../components/DateField";
 import FieldLabel from "../components/FieldLabel";
 import ObraForm, { emptyObraForm, obraToForm, type ObraFormData } from "../components/ObraForm";
 import { DESCRICAO_MAX_LENGTH, limitText } from "../constants/limits";
+import type { Categoria, TipoOperacao } from "../types";
+
+const tipoValorClasses: Record<TipoOperacao, string> = {
+  receita: "text-green-600",
+  despesa: "text-red-600",
+  investimento: "text-indigo-600",
+};
+
+const emptyForm = {
+  categoria: "",
+  subcategoria: "",
+  valor: "",
+  data: new Date().toISOString().slice(0, 10),
+  descricao: "",
+  pago: true,
+};
 
 export default function ObraDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"operacoes" | "extrato">("operacoes");
   const [showForm, setShowForm] = useState(false);
   const [editingObra, setEditingObra] = useState(false);
   const [obraForm, setObraForm] = useState<ObraFormData>(emptyObraForm);
-  const [form, setForm] = useState({
-    categoria: "",
-    valor: "",
-    data: new Date().toISOString().slice(0, 10),
-    descricao: "",
-  });
+  const [form, setForm] = useState(emptyForm);
+
+  const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+  const [filtroSubcategoria, setFiltroSubcategoria] = useState("");
+  const [filtroPago, setFiltroPago] = useState("");
 
   const { data: obra, isLoading } = useQuery({
     queryKey: ["obra", id],
@@ -35,21 +51,25 @@ export default function ObraDetailPage() {
     enabled: !!id,
   });
 
-  const { data: operacoes } = useQuery({
-    queryKey: ["operacoes", id],
-    queryFn: () => operacoesApi.listByObra(id!),
-    enabled: !!id,
-  });
-
-  const { data: extrato } = useQuery({
-    queryKey: ["extrato", id],
-    queryFn: () => operacoesApi.extrato(id!),
-    enabled: !!id && tab === "extrato",
-  });
-
-  const { data: categorias } = useQuery({
+  const { data: categoriasData } = useQuery({
     queryKey: ["categorias"],
     queryFn: () => categoriasApi.list(),
+  });
+  const categorias: Categoria[] = categoriasData?.results ?? [];
+
+  const listParams = useMemo(() => {
+    const params: Record<string, string> = {};
+    if (filtroTipo) params.tipo = filtroTipo;
+    if (filtroCategoria) params.categoria = filtroCategoria;
+    if (filtroSubcategoria) params.subcategoria = filtroSubcategoria;
+    if (filtroPago) params.pago = filtroPago;
+    return params;
+  }, [filtroTipo, filtroCategoria, filtroSubcategoria, filtroPago]);
+
+  const { data: operacoes } = useQuery({
+    queryKey: ["operacoes", id, listParams],
+    queryFn: () => operacoesApi.listByObra(id!, listParams),
+    enabled: !!id,
   });
 
   const { data: cidades = [] } = useQuery({
@@ -58,17 +78,22 @@ export default function ObraDetailPage() {
   });
 
   useEffect(() => {
-    if (obra) {
-      setObraForm(obraToForm(obra));
-    }
+    if (obra) setObraForm(obraToForm(obra));
   }, [obra]);
+
+  const selectedCategoria = categorias.find((c) => c.id === form.categoria);
+  const selectedTipo = selectedCategoria?.tipo;
+  const filtroCategoriaObj = categorias.find((c) => c.id === filtroCategoria);
+
+  function invalidateAll() {
+    queryClient.invalidateQueries({ queryKey: ["operacoes", id] });
+    queryClient.invalidateQueries({ queryKey: ["obra", id] });
+    queryClient.invalidateQueries({ queryKey: ["obras"] });
+  }
 
   const updateObraMutation = useMutation({
     mutationFn: () =>
-      obrasApi.update(id!, {
-        ...obraForm,
-        data_inicio: obraForm.data_inicio || null,
-      }),
+      obrasApi.update(id!, { ...obraForm, data_inicio: obraForm.data_inicio || null }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["obra", id] });
       queryClient.invalidateQueries({ queryKey: ["obras"] });
@@ -78,35 +103,39 @@ export default function ObraDetailPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      operacoesApi.create(id!, {
+    mutationFn: () => {
+      const payload: Record<string, unknown> = {
         categoria: form.categoria,
+        subcategoria: form.subcategoria || null,
         valor: form.valor,
         data: form.data,
         descricao: form.descricao,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["operacoes", id] });
-      queryClient.invalidateQueries({ queryKey: ["extrato", id] });
-      queryClient.invalidateQueries({ queryKey: ["obra", id] });
-      queryClient.invalidateQueries({ queryKey: ["obras"] });
-      setShowForm(false);
-      setForm({ categoria: "", valor: "", data: new Date().toISOString().slice(0, 10), descricao: "" });
+      };
+      if (selectedTipo === "despesa") payload.pago = form.pago;
+      return operacoesApi.create(id!, payload);
     },
+    onSuccess: () => {
+      invalidateAll();
+      setShowForm(false);
+      setForm({ ...emptyForm, data: new Date().toISOString().slice(0, 10) });
+    },
+  });
+
+  const togglePagoMutation = useMutation({
+    mutationFn: ({ opId, pago }: { opId: string; pago: boolean }) =>
+      operacoesApi.update(opId, { pago }),
+    onSuccess: invalidateAll,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (opId: string) => operacoesApi.delete(opId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["operacoes", id] });
-      queryClient.invalidateQueries({ queryKey: ["extrato", id] });
-      queryClient.invalidateQueries({ queryKey: ["obra", id] });
-      queryClient.invalidateQueries({ queryKey: ["obras"] });
-    },
+    onSuccess: invalidateAll,
   });
 
   if (isLoading) return <p className="text-slate-500">Carregando...</p>;
   if (!obra) return <p className="text-red-500">Obra não encontrada.</p>;
+
+  const temPendentes = parseFloat(obra.total_despesas_pendentes) > 0;
 
   return (
     <div>
@@ -130,16 +159,24 @@ export default function ObraDetailPage() {
               )}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setObraForm(obraToForm(obra));
-              setEditingObra(!editingObra);
-            }}
-            className="rounded border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-          >
-            {editingObra ? "Cancelar edição" : "Editar obra"}
-          </button>
+          <div className="flex gap-2">
+            <Link
+              to={`/dashboard?obra=${obra.id}`}
+              className="rounded border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              Ver dashboard
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setObraForm(obraToForm(obra));
+                setEditingObra(!editingObra);
+              }}
+              className="rounded border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              {editingObra ? "Cancelar edição" : "Editar obra"}
+            </button>
+          </div>
         </div>
 
         {editingObra ? (
@@ -158,18 +195,34 @@ export default function ObraDetailPage() {
         ) : (
           <>
             {obra.descricao && <p className="mb-4 text-sm text-slate-600">{obra.descricao}</p>}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <div className="rounded bg-green-50 p-3">
                 <p className="text-xs text-green-600">Receitas</p>
-                <p className="text-lg font-semibold text-green-700">{formatCurrency(obra.total_receitas)}</p>
+                <p className="text-lg font-semibold text-green-700">
+                  {formatCurrency(obra.total_receitas)}
+                </p>
               </div>
               <div className="rounded bg-red-50 p-3">
-                <p className="text-xs text-red-600">Despesas</p>
-                <p className="text-lg font-semibold text-red-700">{formatCurrency(obra.total_despesas)}</p>
+                <p className="text-xs text-red-600">Despesas pagas</p>
+                <p className="text-lg font-semibold text-red-700">
+                  {formatCurrency(obra.total_despesas)}
+                </p>
+                {temPendentes && (
+                  <p className="mt-1 text-xs font-medium text-amber-600">
+                    + {formatCurrency(obra.total_despesas_pendentes)} não pagas
+                  </p>
+                )}
+              </div>
+              <div className="rounded bg-indigo-50 p-3">
+                <p className="text-xs text-indigo-600">Investimentos</p>
+                <p className="text-lg font-semibold text-indigo-700">
+                  {formatCurrency(obra.total_investimentos)}
+                </p>
               </div>
               <div className="rounded bg-slate-50 p-3">
                 <p className="text-xs text-slate-600">Saldo</p>
                 <p className="text-lg font-semibold">{formatCurrency(obra.saldo)}</p>
+                <p className="mt-1 text-[11px] text-slate-400">Não inclui investimentos</p>
               </div>
             </div>
           </>
@@ -177,32 +230,13 @@ export default function ObraDetailPage() {
       </div>
 
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setTab("operacoes")}
-            className={`rounded px-4 py-2 text-sm ${
-              tab === "operacoes" ? "bg-slate-900 text-white" : "bg-white border"
-            }`}
-          >
-            Operações
-          </button>
-          <button
-            onClick={() => setTab("extrato")}
-            className={`rounded px-4 py-2 text-sm ${
-              tab === "extrato" ? "bg-slate-900 text-white" : "bg-white border"
-            }`}
-          >
-            Extrato
-          </button>
-        </div>
-        {tab === "operacoes" && (
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-          >
-            {showForm ? "Cancelar" : "Nova operação"}
-          </button>
-        )}
+        <h3 className="text-lg font-semibold text-slate-800">Operações</h3>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+        >
+          {showForm ? "Cancelar" : "Nova operação"}
+        </button>
       </div>
 
       {showForm && (
@@ -216,8 +250,14 @@ export default function ObraDetailPage() {
           <div className="grid gap-3 md:grid-cols-2">
             <CategoriaSelect
               value={form.categoria}
-              onChange={(categoria) => setForm({ ...form, categoria })}
-              categorias={categorias?.results ?? []}
+              onChange={(categoria) => setForm({ ...form, categoria, subcategoria: "" })}
+              categorias={categorias}
+            />
+            <SubcategoriaSelect
+              value={form.subcategoria}
+              onChange={(subcategoria) => setForm({ ...form, subcategoria })}
+              subcategorias={selectedCategoria?.subcategorias ?? []}
+              disabled={!selectedCategoria}
             />
             <div>
               <FieldLabel htmlFor="op-valor" label="Valor" />
@@ -235,16 +275,14 @@ export default function ObraDetailPage() {
             </div>
             <div>
               <FieldLabel htmlFor="op-data" label="Data do lançamento" />
-              <input
+              <DateField
                 id="op-data"
                 required
-                type="date"
                 value={form.data}
-                onChange={(e) => setForm({ ...form, data: e.target.value })}
-                className="w-full rounded border px-3 py-2"
+                onChange={(data) => setForm({ ...form, data })}
               />
             </div>
-            <div>
+            <div className="md:col-span-2">
               <FieldLabel htmlFor="op-descricao" label="Descrição" optional />
               <input
                 id="op-descricao"
@@ -257,108 +295,190 @@ export default function ObraDetailPage() {
                 className="w-full rounded border px-3 py-2"
               />
             </div>
+            {selectedTipo === "despesa" && (
+              <label className="flex items-center gap-2 md:col-span-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={form.pago}
+                  onChange={(e) => setForm({ ...form, pago: e.target.checked })}
+                  className="h-4 w-4"
+                />
+                Despesa já paga
+                <span className="text-xs text-slate-500">
+                  (se desmarcada, não entra no saldo nem nas despesas pagas)
+                </span>
+              </label>
+            )}
           </div>
           <button
             type="submit"
             disabled={createMutation.isPending}
-            className="mt-3 rounded bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700"
+            className="mt-3 rounded bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
           >
             Salvar operação
           </button>
         </form>
       )}
 
-      {tab === "operacoes" ? (
-        <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left">
-              <tr>
-                <th className="px-4 py-3">Data</th>
-                <th className="px-4 py-3">Categoria</th>
-                <th className="px-4 py-3">Descrição</th>
-                <th className="px-4 py-3">Tipo</th>
-                <th className="px-4 py-3 text-right">Valor</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {operacoes?.results.map((op) => (
-                <tr key={op.id} className="border-t">
+      <div className="mb-4 flex flex-wrap gap-3">
+        <select
+          value={filtroTipo}
+          onChange={(e) => {
+            setFiltroTipo(e.target.value);
+            setFiltroCategoria("");
+            setFiltroSubcategoria("");
+          }}
+          className="rounded border px-3 py-2 text-sm"
+        >
+          <option value="">Todos os tipos</option>
+          <option value="despesa">Despesas</option>
+          <option value="receita">Receitas</option>
+          <option value="investimento">Investimentos</option>
+        </select>
+        <select
+          value={filtroCategoria}
+          onChange={(e) => {
+            setFiltroCategoria(e.target.value);
+            setFiltroSubcategoria("");
+          }}
+          className="rounded border px-3 py-2 text-sm"
+        >
+          <option value="">Todas as categorias</option>
+          {categorias
+            .filter((c) => !filtroTipo || c.tipo === filtroTipo)
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+        </select>
+        <select
+          value={filtroSubcategoria}
+          onChange={(e) => setFiltroSubcategoria(e.target.value)}
+          disabled={!filtroCategoriaObj || filtroCategoriaObj.subcategorias.length === 0}
+          className="rounded border px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+        >
+          <option value="">Todas as subcategorias</option>
+          {filtroCategoriaObj?.subcategorias.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.nome}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filtroPago}
+          onChange={(e) => setFiltroPago(e.target.value)}
+          className="rounded border px-3 py-2 text-sm"
+        >
+          <option value="">Pagas e não pagas</option>
+          <option value="true">Somente pagas</option>
+          <option value="false">Somente não pagas</option>
+        </select>
+        {(filtroTipo || filtroCategoria || filtroSubcategoria || filtroPago) && (
+          <button
+            type="button"
+            onClick={() => {
+              setFiltroTipo("");
+              setFiltroCategoria("");
+              setFiltroSubcategoria("");
+              setFiltroPago("");
+            }}
+            className="rounded border px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+          >
+            Limpar filtros
+          </button>
+        )}
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left">
+            <tr>
+              <th className="px-4 py-3">Data</th>
+              <th className="px-4 py-3">Categoria</th>
+              <th className="px-4 py-3">Descrição</th>
+              <th className="px-4 py-3">Tipo</th>
+              <th className="px-4 py-3">Situação</th>
+              <th className="px-4 py-3 text-right">Valor</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {operacoes?.results.map((op) => {
+              const naoPaga = op.tipo === "despesa" && !op.pago;
+              return (
+                <tr
+                  key={op.id}
+                  className={`border-t ${naoPaga ? "bg-amber-50" : ""}`}
+                >
                   <td className="px-4 py-3">{formatDate(op.data)}</td>
-                  <td className="px-4 py-3">{op.categoria_nome}</td>
+                  <td className="px-4 py-3">
+                    {op.categoria_nome}
+                    {op.subcategoria_nome && (
+                      <span className="text-slate-400"> › {op.subcategoria_nome}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">{op.descricao || "—"}</td>
                   <td className="px-4 py-3">{tipoLabels[op.tipo] ?? op.tipo}</td>
+                  <td className="px-4 py-3">
+                    {op.tipo === "despesa" ? (
+                      naoPaga ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                          ● Não paga
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">Paga</span>
+                      )
+                    ) : (
+                      <span className="text-xs text-slate-300">—</span>
+                    )}
+                  </td>
                   <td
-                    className={`px-4 py-3 text-right font-medium ${
-                      op.tipo === "receita" ? "text-green-600" : "text-red-600"
+                    className={`px-4 py-3 text-right font-medium ${tipoValorClasses[op.tipo]} ${
+                      naoPaga ? "opacity-70" : ""
                     }`}
                   >
+                    {op.tipo === "receita" ? "+" : op.tipo === "despesa" ? "-" : ""}
                     {formatCurrency(op.valor)}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => {
-                        if (confirm("Excluir operação?")) deleteMutation.mutate(op.id);
-                      }}
-                      className="text-xs text-red-500 hover:text-red-700"
-                    >
-                      Excluir
-                    </button>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-3">
+                      {op.tipo === "despesa" && (
+                        <button
+                          onClick={() =>
+                            togglePagoMutation.mutate({ opId: op.id, pago: !op.pago })
+                          }
+                          disabled={togglePagoMutation.isPending}
+                          className={`text-xs hover:underline ${
+                            naoPaga ? "text-green-600" : "text-amber-600"
+                          }`}
+                        >
+                          {naoPaga ? "Marcar paga" : "Marcar não paga"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (confirm("Excluir operação?")) deleteMutation.mutate(op.id);
+                        }}
+                        className="text-xs text-red-500 hover:text-red-700"
+                      >
+                        Excluir
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ))}
-              {operacoes?.results.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
-                    Nenhuma operação registrada.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left">
+              );
+            })}
+            {operacoes?.results.length === 0 && (
               <tr>
-                <th className="px-4 py-3">Data</th>
-                <th className="px-4 py-3">Categoria</th>
-                <th className="px-4 py-3">Descrição</th>
-                <th className="px-4 py-3 text-right">Valor</th>
-                <th className="px-4 py-3 text-right">Saldo</th>
+                <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
+                  Nenhuma operação encontrada.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {extrato?.map((item) => (
-                <tr key={item.id} className="border-t">
-                  <td className="px-4 py-3">{formatDate(item.data)}</td>
-                  <td className="px-4 py-3">{item.categoria_nome}</td>
-                  <td className="px-4 py-3">{item.descricao || "—"}</td>
-                  <td
-                    className={`px-4 py-3 text-right ${
-                      item.tipo === "receita" ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {item.tipo === "receita" ? "+" : "-"}
-                    {formatCurrency(item.valor)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium">
-                    {formatCurrency(item.saldo_acumulado)}
-                  </td>
-                </tr>
-              ))}
-              {extrato?.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
-                    Nenhum lançamento no extrato.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

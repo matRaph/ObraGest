@@ -1,5 +1,5 @@
 export type ObraStatus = "planejada" | "em_andamento" | "concluida" | "pausada";
-export type TipoOperacao = "receita" | "despesa";
+export type TipoOperacao = "receita" | "despesa" | "investimento";
 
 export interface Obra {
   id: string;
@@ -11,15 +11,28 @@ export interface Obra {
   criado_em: string;
   total_receitas: string;
   total_despesas: string;
+  total_despesas_pendentes: string;
+  total_investimentos: string;
   saldo: string;
+}
+
+export interface Subcategoria {
+  id: string;
+  nome: string;
+  tipo: TipoOperacao;
+  parent: string;
+  padrao: boolean;
+  ativa: boolean;
 }
 
 export interface Categoria {
   id: string;
   nome: string;
   tipo: TipoOperacao;
+  parent: string | null;
   padrao: boolean;
   ativa: boolean;
+  subcategorias: Subcategoria[];
 }
 
 export interface Operacao {
@@ -27,26 +40,21 @@ export interface Operacao {
   obra: string;
   categoria: string;
   categoria_nome: string;
+  subcategoria: string | null;
+  subcategoria_nome: string | null;
   valor: string;
   data: string;
   tipo: TipoOperacao;
+  pago: boolean;
   descricao: string;
   criado_em: string;
-}
-
-export interface ExtratoItem {
-  id: string;
-  data: string;
-  descricao: string;
-  categoria_nome: string;
-  tipo: TipoOperacao;
-  valor: string;
-  saldo_acumulado: string;
 }
 
 export interface DashboardData {
   total_receitas: string;
   total_despesas: string;
+  total_despesas_pendentes: string;
+  total_investimentos: string;
   saldo: string;
   por_obra: Array<{
     obra_id: string;
@@ -54,12 +62,14 @@ export interface DashboardData {
     cidade: string;
     receitas: string;
     despesas: string;
+    investimentos: string;
     saldo: string;
   }>;
   por_cidade: Array<{
     cidade: string;
     receitas: string;
     despesas: string;
+    investimentos: string;
     saldo: string;
   }>;
   por_categoria: Array<{
@@ -67,6 +77,11 @@ export interface DashboardData {
     nome: string;
     tipo: TipoOperacao;
     total: string;
+    subcategorias: Array<{
+      subcategoria_id: string | null;
+      nome: string;
+      total: string;
+    }>;
   }>;
 }
 

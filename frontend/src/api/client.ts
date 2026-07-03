@@ -3,7 +3,6 @@ import type {
   BackupInfo,
   Categoria,
   DashboardData,
-  ExtratoItem,
   Obra,
   Operacao,
   PaginatedResponse,
@@ -36,14 +35,21 @@ export const operacoesApi = {
   update: (id: string, data: Partial<Operacao>) =>
     api.patch<Operacao>(`/operacoes/${id}/`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/operacoes/${id}/`),
-  extrato: (obraId: string, params?: Record<string, string>) =>
-    api
-      .get<ExtratoItem[]>(`/obras/${obraId}/extrato/`, { params })
-      .then((r) => r.data),
 };
+
+export interface CategoriaInput {
+  nome: string;
+  tipo?: string;
+  parent?: string | null;
+}
 
 export const categoriasApi = {
   list: () => api.get<PaginatedResponse<Categoria>>("/categorias/").then((r) => r.data),
+  create: (data: CategoriaInput) =>
+    api.post<Categoria>("/categorias/", data).then((r) => r.data),
+  update: (id: string, data: Partial<CategoriaInput>) =>
+    api.patch<Categoria>(`/categorias/${id}/`, data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/categorias/${id}/`),
 };
 
 export const dashboardApi = {
@@ -89,4 +95,11 @@ export const statusLabels: Record<string, string> = {
 export const tipoLabels: Record<string, string> = {
   despesa: "Despesa",
   receita: "Receita",
+  investimento: "Investimento",
+};
+
+export const tipoPluralLabels: Record<string, string> = {
+  despesa: "Despesas",
+  receita: "Receitas",
+  investimento: "Investimentos",
 };

@@ -1,4 +1,5 @@
 import CityInput from "./CityInput";
+import DateField from "./DateField";
 import FieldLabel from "./FieldLabel";
 import { DESCRICAO_MAX_LENGTH, limitText, NOME_MAX_LENGTH } from "../constants/limits";
 import { statusLabels } from "../api/client";
@@ -84,12 +85,10 @@ export default function ObraForm({
         </div>
         <div>
           <FieldLabel htmlFor="obra-data-inicio" label="Data de início" optional />
-          <input
+          <DateField
             id="obra-data-inicio"
-            type="date"
             value={form.data_inicio}
-            onChange={(e) => onChange({ ...form, data_inicio: e.target.value })}
-            className="w-full rounded border px-3 py-2"
+            onChange={(data_inicio) => onChange({ ...form, data_inicio })}
           />
         </div>
         <div className="col-span-full">

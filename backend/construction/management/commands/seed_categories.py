@@ -11,8 +11,11 @@ CATEGORIAS_PADRAO = [
     ("Administrativo", TipoOperacao.DESPESA),
     ("Recebimento de cliente", TipoOperacao.RECEITA),
     ("Adiantamento", TipoOperacao.RECEITA),
+    ("Aquisição de equipamento", TipoOperacao.INVESTIMENTO),
+    ("Compra de imóvel", TipoOperacao.INVESTIMENTO),
     ("Outros", TipoOperacao.DESPESA),
     ("Outros", TipoOperacao.RECEITA),
+    ("Outros", TipoOperacao.INVESTIMENTO),
 ]
 
 LEGACY_CATEGORIAS = [
@@ -41,6 +44,7 @@ class Command(BaseCommand):
             target, _ = Categoria.objects.get_or_create(
                 nome=new_nome,
                 tipo=tipo,
+                parent=None,
                 defaults={"padrao": True, "ativa": True},
             )
             Operacao.objects.filter(categoria=legacy).update(categoria=target)
@@ -53,6 +57,7 @@ class Command(BaseCommand):
             _, was_created = Categoria.objects.get_or_create(
                 nome=nome,
                 tipo=tipo,
+                parent=None,
                 defaults={"padrao": True, "ativa": True},
             )
             if was_created:

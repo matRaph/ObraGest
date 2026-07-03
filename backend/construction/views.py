@@ -1,7 +1,16 @@
 from decimal import Decimal
 import zipfile
 
-from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
+from django.db.models import (
+    Case,
+    DecimalField,
+    F,
+    IntegerField,
+    Q,
+    Sum,
+    Value,
+    When,
+)
 from django.db.models.functions import Coalesce
 from django.http import FileResponse
 from rest_framework import status, viewsets
@@ -13,7 +22,6 @@ from rest_framework.views import APIView
 from .models import Categoria, Obra, Operacao, TipoOperacao
 from .serializers import (
     CategoriaSerializer,
-    ExtratoItemSerializer,
     ObraDetailSerializer,
     ObraListSerializer,
     OperacaoSerializer,
@@ -27,50 +35,51 @@ from .services.backup import (
 )
 
 
-class CategoriaViewSet(viewsets.ReadOnlyModelViewSet):
+class CategoriaViewSet(viewsets.ModelViewSet):
     serializer_class = CategoriaSerializer
 
     def get_queryset(self):
-        return (
-            Categoria.objects.filter(ativa=True)
-            .annotate(
-                tipo_order=Case(
-                    When(tipo=TipoOperacao.DESPESA, then=Value(0)),
-                    default=Value(1),
-                    output_field=IntegerField(),
-                )
+        qs = Categoria.objects.filter(ativa=True).prefetch_related("subcategorias")
+        if self.action == "list":
+            qs = qs.filter(parent__isnull=True)
+        return qs.annotate(
+            tipo_order=Case(
+                When(tipo=TipoOperacao.DESPESA, then=Value(0)),
+                When(tipo=TipoOperacao.RECEITA, then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
             )
-            .order_by("tipo_order", "nome")
-        )
+        ).order_by("tipo_order", "nome")
+
+    def perform_destroy(self, instance: Categoria):
+        instance.ativa = False
+        instance.save(update_fields=["ativa"])
+        instance.subcategorias.update(ativa=False)
 
 
 class ObraViewSet(viewsets.ModelViewSet):
     queryset = Obra.objects.all()
 
     def get_queryset(self):
-        qs = Obra.objects.annotate(
-            total_receitas=Coalesce(
+        qs = Obra.objects.prefetch_related("operacoes").annotate(
+            _receitas=Coalesce(
                 Sum(
-                    Case(
-                        When(operacoes__tipo=TipoOperacao.RECEITA, then=F("operacoes__valor")),
-                        default=Value(0),
-                        output_field=DecimalField(),
-                    )
+                    "operacoes__valor",
+                    filter=Q(operacoes__tipo=TipoOperacao.RECEITA),
                 ),
                 Value(Decimal("0")),
+                output_field=DecimalField(),
             ),
-            total_despesas=Coalesce(
+            _despesas_pagas=Coalesce(
                 Sum(
-                    Case(
-                        When(operacoes__tipo=TipoOperacao.DESPESA, then=F("operacoes__valor")),
-                        default=Value(0),
-                        output_field=DecimalField(),
-                    )
+                    "operacoes__valor",
+                    filter=Q(operacoes__tipo=TipoOperacao.DESPESA, operacoes__pago=True),
                 ),
                 Value(Decimal("0")),
+                output_field=DecimalField(),
             ),
         ).annotate(
-            saldo=F("total_receitas") - F("total_despesas"),
+            saldo=F("_receitas") - F("_despesas_pagas"),
         )
 
         cidade = self.request.query_params.get("cidade")
@@ -113,9 +122,11 @@ class ObraViewSet(viewsets.ModelViewSet):
         obra = self.get_object()
 
         if request.method == "GET":
-            qs = obra.operacoes.select_related("categoria")
+            qs = obra.operacoes.select_related("categoria", "subcategoria")
             tipo = request.query_params.get("tipo")
             categoria = request.query_params.get("categoria")
+            subcategoria = request.query_params.get("subcategoria")
+            pago = request.query_params.get("pago")
             data_inicio = request.query_params.get("data_inicio")
             data_fim = request.query_params.get("data_fim")
             ordering = request.query_params.get("ordering", "-data")
@@ -124,6 +135,10 @@ class ObraViewSet(viewsets.ModelViewSet):
                 qs = qs.filter(tipo=tipo)
             if categoria:
                 qs = qs.filter(categoria_id=categoria)
+            if subcategoria:
+                qs = qs.filter(subcategoria_id=subcategoria)
+            if pago in ("true", "false"):
+                qs = qs.filter(pago=(pago == "true"))
             if data_inicio:
                 qs = qs.filter(data__gte=data_inicio)
             if data_fim:
@@ -143,40 +158,6 @@ class ObraViewSet(viewsets.ModelViewSet):
         serializer.save(obra=obra)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=["get"])
-    def extrato(self, request, pk=None):
-        obra = self.get_object()
-        operacoes = obra.operacoes.select_related("categoria").order_by("data", "criado_em")
-
-        data_inicio = request.query_params.get("data_inicio")
-        data_fim = request.query_params.get("data_fim")
-        if data_inicio:
-            operacoes = operacoes.filter(data__gte=data_inicio)
-        if data_fim:
-            operacoes = operacoes.filter(data__lte=data_fim)
-
-        saldo = Decimal("0")
-        items = []
-        for op in operacoes:
-            if op.tipo == TipoOperacao.RECEITA:
-                saldo += op.valor
-            else:
-                saldo -= op.valor
-            items.append(
-                {
-                    "id": op.id,
-                    "data": op.data,
-                    "descricao": op.descricao,
-                    "categoria_nome": op.categoria.nome,
-                    "tipo": op.tipo,
-                    "valor": op.valor,
-                    "saldo_acumulado": saldo,
-                }
-            )
-
-        serializer = ExtratoItemSerializer(items, many=True)
-        return Response(serializer.data)
-
 
 class OperacaoViewSet(viewsets.ModelViewSet):
     queryset = Operacao.objects.select_related("categoria", "obra")
@@ -194,8 +175,11 @@ class DashboardView(APIView):
     def get(self, request):
         data_inicio = request.query_params.get("data_inicio")
         data_fim = request.query_params.get("data_fim")
+        obra_id = request.query_params.get("obra")
 
-        operacoes = Operacao.objects.select_related("obra", "categoria")
+        operacoes = Operacao.objects.select_related("obra", "categoria", "subcategoria")
+        if obra_id:
+            operacoes = operacoes.filter(obra_id=obra_id)
         if data_inicio:
             operacoes = operacoes.filter(data__gte=data_inicio)
         if data_fim:
@@ -203,17 +187,30 @@ class DashboardView(APIView):
 
         total_receitas = Decimal("0")
         total_despesas = Decimal("0")
+        total_despesas_pendentes = Decimal("0")
+        total_investimentos = Decimal("0")
         por_obra: dict = {}
         por_cidade: dict = {}
         por_categoria: dict = {}
 
+        def _delta(op) -> Decimal:
+            if op.tipo == TipoOperacao.RECEITA:
+                return op.valor
+            if op.tipo == TipoOperacao.DESPESA and op.pago:
+                return -op.valor
+            return Decimal("0")
+
         for op in operacoes:
+            delta = _delta(op)
             if op.tipo == TipoOperacao.RECEITA:
                 total_receitas += op.valor
-                delta = op.valor
-            else:
-                total_despesas += op.valor
-                delta = -op.valor
+            elif op.tipo == TipoOperacao.DESPESA:
+                if op.pago:
+                    total_despesas += op.valor
+                else:
+                    total_despesas_pendentes += op.valor
+            elif op.tipo == TipoOperacao.INVESTIMENTO:
+                total_investimentos += op.valor
 
             obra_key = str(op.obra_id)
             if obra_key not in por_obra:
@@ -223,27 +220,27 @@ class DashboardView(APIView):
                     "cidade": op.obra.cidade,
                     "receitas": Decimal("0"),
                     "despesas": Decimal("0"),
+                    "investimentos": Decimal("0"),
                     "saldo": Decimal("0"),
                 }
-            if op.tipo == TipoOperacao.RECEITA:
-                por_obra[obra_key]["receitas"] += op.valor
-            else:
-                por_obra[obra_key]["despesas"] += op.valor
-            por_obra[obra_key]["saldo"] += delta
-
             cidade = op.obra.cidade
             if cidade not in por_cidade:
                 por_cidade[cidade] = {
                     "cidade": cidade,
                     "receitas": Decimal("0"),
                     "despesas": Decimal("0"),
+                    "investimentos": Decimal("0"),
                     "saldo": Decimal("0"),
                 }
-            if op.tipo == TipoOperacao.RECEITA:
-                por_cidade[cidade]["receitas"] += op.valor
-            else:
-                por_cidade[cidade]["despesas"] += op.valor
-            por_cidade[cidade]["saldo"] += delta
+
+            for bucket in (por_obra[obra_key], por_cidade[cidade]):
+                if op.tipo == TipoOperacao.RECEITA:
+                    bucket["receitas"] += op.valor
+                elif op.tipo == TipoOperacao.DESPESA and op.pago:
+                    bucket["despesas"] += op.valor
+                elif op.tipo == TipoOperacao.INVESTIMENTO:
+                    bucket["investimentos"] += op.valor
+                bucket["saldo"] += delta
 
             cat_key = str(op.categoria_id)
             if cat_key not in por_categoria:
@@ -252,20 +249,47 @@ class DashboardView(APIView):
                     "nome": op.categoria.nome,
                     "tipo": op.categoria.tipo,
                     "total": Decimal("0"),
+                    "_subs": {},
                 }
-            por_categoria[cat_key]["total"] += op.valor
+            entry = por_categoria[cat_key]
+            entry["total"] += op.valor
+
+            sub_key = str(op.subcategoria_id) if op.subcategoria_id else "__none__"
+            sub_nome = op.subcategoria.nome if op.subcategoria_id else "Sem subcategoria"
+            if sub_key not in entry["_subs"]:
+                entry["_subs"][sub_key] = {
+                    "subcategoria_id": op.subcategoria_id,
+                    "nome": sub_nome,
+                    "total": Decimal("0"),
+                }
+            entry["_subs"][sub_key]["total"] += op.valor
+
+        categorias = []
+        for entry in sorted(
+            por_categoria.values(),
+            key=lambda x: (
+                {TipoOperacao.DESPESA: 0, TipoOperacao.RECEITA: 1}.get(x["tipo"], 2),
+                x["nome"],
+            ),
+        ):
+            subs = sorted(
+                entry.pop("_subs").values(),
+                key=lambda s: s["total"],
+                reverse=True,
+            )
+            entry["subcategorias"] = subs
+            categorias.append(entry)
 
         return Response(
             {
                 "total_receitas": total_receitas,
                 "total_despesas": total_despesas,
+                "total_despesas_pendentes": total_despesas_pendentes,
+                "total_investimentos": total_investimentos,
                 "saldo": total_receitas - total_despesas,
                 "por_obra": list(por_obra.values()),
                 "por_cidade": list(por_cidade.values()),
-                "por_categoria": sorted(
-                    por_categoria.values(),
-                    key=lambda x: (0 if x["tipo"] == TipoOperacao.DESPESA else 1, x["nome"]),
-                ),
+                "por_categoria": categorias,
             }
         )
 
