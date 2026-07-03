@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from .constants import DESCRICAO_MAX_LENGTH, NOME_MAX_LENGTH
 from .models import Categoria, Obra, Operacao, TipoOperacao
 
 
@@ -12,6 +13,10 @@ class CategoriaSerializer(serializers.ModelSerializer):
 
 
 class ObraListSerializer(serializers.ModelSerializer):
+    nome = serializers.CharField(max_length=NOME_MAX_LENGTH)
+    descricao = serializers.CharField(
+        max_length=DESCRICAO_MAX_LENGTH, required=False, allow_blank=True
+    )
     total_receitas = serializers.DecimalField(
         max_digits=12, decimal_places=2, read_only=True
     )
@@ -37,6 +42,10 @@ class ObraListSerializer(serializers.ModelSerializer):
 
 
 class ObraDetailSerializer(serializers.ModelSerializer):
+    nome = serializers.CharField(max_length=NOME_MAX_LENGTH)
+    descricao = serializers.CharField(
+        max_length=DESCRICAO_MAX_LENGTH, required=False, allow_blank=True
+    )
     total_receitas = serializers.SerializerMethodField()
     total_despesas = serializers.SerializerMethodField()
     saldo = serializers.SerializerMethodField()
@@ -81,6 +90,9 @@ class ObraDetailSerializer(serializers.ModelSerializer):
 
 class OperacaoSerializer(serializers.ModelSerializer):
     categoria_nome = serializers.CharField(source="categoria.nome", read_only=True)
+    descricao = serializers.CharField(
+        max_length=DESCRICAO_MAX_LENGTH, required=False, allow_blank=True
+    )
 
     class Meta:
         model = Operacao

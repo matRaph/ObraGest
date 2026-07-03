@@ -1,3 +1,4 @@
+import io
 import json
 import shutil
 import zipfile
@@ -26,20 +27,33 @@ def _manifest() -> dict:
     }
 
 
-def create_backup(destino: str | None = None) -> Path:
+def _backup_filename() -> str:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"obragest_backup_{timestamp}.zip"
+
+
+def _write_backup_zip(target) -> None:
     db = _db_path()
     if not db.exists():
         raise FileNotFoundError("Banco de dados não encontrado.")
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_dir = Path(destino) if destino else settings.BACKUP_DIR
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    zip_path = backup_dir / f"obragest_backup_{timestamp}.zip"
-
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(db, arcname="db.sqlite3")
         zf.writestr("manifest.json", json.dumps(_manifest(), indent=2))
 
+
+def build_backup_archive() -> tuple[str, io.BytesIO]:
+    buffer = io.BytesIO()
+    _write_backup_zip(buffer)
+    buffer.seek(0)
+    return _backup_filename(), buffer
+
+
+def create_backup(destino: str | None = None) -> Path:
+    backup_dir = Path(destino) if destino else settings.BACKUP_DIR
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = backup_dir / _backup_filename()
+    _write_backup_zip(zip_path)
     return zip_path
 
 
@@ -57,24 +71,33 @@ def list_backups() -> list[dict]:
     return backups
 
 
+def _restore_from_zip(zf: zipfile.ZipFile) -> None:
+    if "db.sqlite3" not in zf.namelist():
+        raise ValueError("Backup inválido: db.sqlite3 não encontrado.")
+    if "manifest.json" not in zf.namelist():
+        raise ValueError("Backup inválido: manifest.json não encontrado.")
+
+    manifest = json.loads(zf.read("manifest.json"))
+    if "version" not in manifest:
+        raise ValueError("Backup inválido: manifest corrompido.")
+
+    connection.close()
+    db = _db_path()
+    temp_db = db.with_suffix(".sqlite3.restore")
+    with zf.open("db.sqlite3") as src, open(temp_db, "wb") as dst:
+        shutil.copyfileobj(src, dst)
+    shutil.move(temp_db, db)
+
+
 def restore_backup(backup_path: str) -> None:
     path = Path(backup_path)
     if not path.exists():
         raise FileNotFoundError(f"Backup não encontrado: {backup_path}")
 
     with zipfile.ZipFile(path, "r") as zf:
-        if "db.sqlite3" not in zf.namelist():
-            raise ValueError("Backup inválido: db.sqlite3 não encontrado.")
-        if "manifest.json" not in zf.namelist():
-            raise ValueError("Backup inválido: manifest.json não encontrado.")
+        _restore_from_zip(zf)
 
-        manifest = json.loads(zf.read("manifest.json"))
-        if "version" not in manifest:
-            raise ValueError("Backup inválido: manifest corrompido.")
 
-        connection.close()
-        db = _db_path()
-        temp_db = db.with_suffix(".sqlite3.restore")
-        with zf.open("db.sqlite3") as src, open(temp_db, "wb") as dst:
-            shutil.copyfileobj(src, dst)
-        shutil.move(temp_db, db)
+def restore_backup_file(uploaded_file) -> None:
+    with zipfile.ZipFile(uploaded_file, "r") as zf:
+        _restore_from_zip(zf)

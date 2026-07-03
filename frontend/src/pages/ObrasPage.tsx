@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { formatCurrency, obrasApi, statusLabels } from "../api/client";
 import CityInput from "../components/CityInput";
+import ObraForm, { emptyObraForm } from "../components/ObraForm";
 import type { Obra, ObraStatus } from "../types";
 
 const statusOptions: ObraStatus[] = ["planejada", "em_andamento", "concluida", "pausada"];
@@ -13,13 +14,7 @@ export default function ObrasPage() {
   const [status, setStatus] = useState("");
   const [ordering, setOrdering] = useState("-criado_em");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    nome: "",
-    cidade: "",
-    status: "planejada" as ObraStatus,
-    data_inicio: "",
-    descricao: "",
-  });
+  const [form, setForm] = useState(emptyObraForm);
 
   const params: Record<string, string> = { ordering };
   if (cidade) params.cidade = cidade;
@@ -45,7 +40,7 @@ export default function ObrasPage() {
       queryClient.invalidateQueries({ queryKey: ["obras"] });
       queryClient.invalidateQueries({ queryKey: ["cidades"] });
       setShowForm(false);
-      setForm({ nome: "", cidade: "", status: "planejada", data_inicio: "", descricao: "" });
+      setForm(emptyObraForm);
     },
   });
 
@@ -70,61 +65,20 @@ export default function ObrasPage() {
       </div>
 
       {showForm && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createMutation.mutate();
-          }}
-          className="mb-6 rounded-lg border bg-white p-4 shadow-sm"
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <input
-              required
-              placeholder="Nome da obra"
-              value={form.nome}
-              onChange={(e) => setForm({ ...form, nome: e.target.value })}
-              className="rounded border px-3 py-2"
-            />
-            <CityInput
-              required
-              value={form.cidade}
-              onChange={(cidade) => setForm({ ...form, cidade })}
-              cities={cidades}
-              placeholder="Cidade"
-            />
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as ObraStatus })}
-              className="rounded border px-3 py-2"
-            >
-              {statusOptions.map((s) => (
-                <option key={s} value={s}>
-                  {statusLabels[s]}
-                </option>
-              ))}
-            </select>
-            <input
-              type="date"
-              value={form.data_inicio}
-              onChange={(e) => setForm({ ...form, data_inicio: e.target.value })}
-              className="rounded border px-3 py-2"
-            />
-            <textarea
-              placeholder="Descrição"
-              value={form.descricao}
-              onChange={(e) => setForm({ ...form, descricao: e.target.value })}
-              className="col-span-full rounded border px-3 py-2"
-              rows={2}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="mt-4 rounded bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
-          >
-            Salvar obra
-          </button>
-        </form>
+        <div className="mb-6">
+          <ObraForm
+            form={form}
+            onChange={setForm}
+            cities={cidades}
+            onSubmit={() => createMutation.mutate()}
+            onCancel={() => {
+              setShowForm(false);
+              setForm(emptyObraForm);
+            }}
+            isPending={createMutation.isPending}
+            submitLabel="Cadastrar obra"
+          />
+        </div>
       )}
 
       <div className="mb-4 flex flex-wrap gap-3">

@@ -1,31 +1,75 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 import { backupApi } from "../api/client";
+import { BackupDownloadCancelledError } from "../utils/saveBackup";
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
-  const { data: backups, isLoading } = useQuery({
-    queryKey: ["backups"],
-    queryFn: () => backupApi.list(),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: () => backupApi.create(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["backups"] }),
-  });
-
-  const restoreMutation = useMutation({
-    mutationFn: (path: string) => backupApi.restore(path),
-    onSuccess: () => {
-      queryClient.invalidateQueries();
-      alert("Backup restaurado. Recarregue a página se necessário.");
+  const downloadMutation = useMutation({
+    mutationFn: () => backupApi.download(),
+    onSuccess: (filename) => {
+      setDownloadMessage(`Backup salvo: ${filename}`);
+      setDownloadError(null);
+      setRestoreError(null);
+    },
+    onError: (error: unknown) => {
+      if (error instanceof BackupDownloadCancelledError) {
+        setDownloadMessage(null);
+        setDownloadError(null);
+        return;
+      }
+      setDownloadMessage(null);
+      setDownloadError(
+        error instanceof Error ? error.message : "Não foi possível salvar o backup."
+      );
     },
   });
 
-  function formatSize(bytes: number) {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const restoreMutation = useMutation({
+    mutationFn: (file: File) => backupApi.restoreFile(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      setRestoreError(null);
+      alert("Backup restaurado. Recarregue a página se necessário.");
+    },
+    onError: (error: unknown) => {
+      const message =
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        error.response &&
+        typeof error.response === "object" &&
+        "data" in error.response &&
+        error.response.data &&
+        typeof error.response.data === "object" &&
+        "error" in error.response.data
+          ? String(error.response.data.error)
+          : "Não foi possível restaurar o backup.";
+      setRestoreError(message);
+    },
+  });
+
+  function handleRestoreClick() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (
+      confirm(
+        `Restaurar o backup "${file.name}"? Os dados atuais serão substituídos.`
+      )
+    ) {
+      restoreMutation.mutate(file);
+    }
   }
 
   return (
@@ -35,59 +79,46 @@ export default function SettingsPage() {
       <div className="mb-8 rounded-lg border bg-white p-6 shadow-sm">
         <h3 className="mb-2 font-medium">Backup manual</h3>
         <p className="mb-4 text-sm text-slate-500">
-          Gera um arquivo .zip com o banco de dados e metadados na pasta de backups do sistema.
+          Gera um arquivo .zip com o banco de dados e metadados. Ao clicar, o
+          navegador abrirá o diálogo para escolher onde salvar o arquivo.
+          Recomendado usar Chrome ou Edge para escolher a pasta de destino.
         </p>
         <button
-          onClick={() => createMutation.mutate()}
-          disabled={createMutation.isPending}
+          onClick={() => downloadMutation.mutate()}
+          disabled={downloadMutation.isPending}
           className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {createMutation.isPending ? "Gerando..." : "Gerar backup agora"}
+          {downloadMutation.isPending ? "Gerando..." : "Salvar backup..."}
         </button>
-        {createMutation.isSuccess && (
-          <p className="mt-2 text-sm text-green-600">
-            Backup salvo em: {createMutation.data.path}
-          </p>
+        {downloadMessage && (
+          <p className="mt-2 text-sm text-green-600">{downloadMessage}</p>
+        )}
+        {downloadError && (
+          <p className="mt-2 text-sm text-red-600">{downloadError}</p>
         )}
       </div>
 
       <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <h3 className="mb-4 font-medium">Backups disponíveis</h3>
-        {isLoading ? (
-          <p className="text-slate-500">Carregando...</p>
-        ) : backups && backups.length > 0 ? (
-          <div className="space-y-2">
-            {backups.map((backup) => (
-              <div
-                key={backup.path}
-                className="flex items-center justify-between rounded border px-4 py-3 text-sm"
-              >
-                <div>
-                  <p className="font-medium">{backup.nome}</p>
-                  <p className="text-slate-400">
-                    {new Date(backup.criado_em).toLocaleString("pt-BR")} · {formatSize(backup.tamanho)}
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    if (
-                      confirm(
-                        "Restaurar este backup? Os dados atuais serão substituídos."
-                      )
-                    ) {
-                      restoreMutation.mutate(backup.path);
-                    }
-                  }}
-                  disabled={restoreMutation.isPending}
-                  className="rounded border border-orange-300 px-3 py-1 text-orange-600 hover:bg-orange-50 disabled:opacity-50"
-                >
-                  Restaurar
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-slate-400">Nenhum backup encontrado.</p>
+        <h3 className="mb-2 font-medium">Restaurar backup</h3>
+        <p className="mb-4 text-sm text-slate-500">
+          Selecione um arquivo .zip de backup salvo no seu computador.
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".zip,application/zip"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <button
+          onClick={handleRestoreClick}
+          disabled={restoreMutation.isPending}
+          className="rounded border border-orange-300 px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 disabled:opacity-50"
+        >
+          {restoreMutation.isPending ? "Restaurando..." : "Escolher arquivo..."}
+        </button>
+        {restoreError && (
+          <p className="mt-2 text-sm text-red-600">{restoreError}</p>
         )}
       </div>
     </div>

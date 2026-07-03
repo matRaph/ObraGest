@@ -1,9 +1,12 @@
 from decimal import Decimal
+import zipfile
 
 from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
 from django.db.models.functions import Coalesce
+from django.http import FileResponse
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -15,7 +18,13 @@ from .serializers import (
     ObraListSerializer,
     OperacaoSerializer,
 )
-from .services.backup import create_backup, list_backups, restore_backup
+from .services.backup import (
+    build_backup_archive,
+    create_backup,
+    list_backups,
+    restore_backup,
+    restore_backup_file,
+)
 
 
 class CategoriaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -266,6 +275,17 @@ class HealthView(APIView):
         return Response({"status": "ok"})
 
 
+class BackupDownloadView(APIView):
+    def get(self, request):
+        filename, buffer = build_backup_archive()
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type="application/zip",
+        )
+
+
 class BackupView(APIView):
     def get(self, request):
         return Response({"backups": list_backups()})
@@ -280,12 +300,32 @@ class BackupView(APIView):
 
 
 class RestoreBackupView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
     def post(self, request):
+        uploaded = request.FILES.get("file")
+        if uploaded:
+            if not uploaded.name.lower().endswith(".zip"):
+                return Response(
+                    {"error": "Envie um arquivo .zip de backup."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                restore_backup_file(uploaded)
+            except (ValueError, zipfile.BadZipFile) as exc:
+                return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Backup restaurado com sucesso."})
+
         backup_path = request.data.get("path")
         if not backup_path:
             return Response(
-                {"error": "Informe o caminho do backup em 'path'."},
+                {"error": "Envie um arquivo .zip ou informe o caminho em 'path'."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        restore_backup(backup_path)
+        try:
+            restore_backup(backup_path)
+        except FileNotFoundError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"message": "Backup restaurado com sucesso."})

@@ -10,15 +10,19 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { dashboardApi, formatCurrency, tipoLabels } from "../api/client";
+import { dashboardApi, formatCurrency, formatDate, tipoLabels } from "../api/client";
+import { getCurrentMonthRange } from "../utils/dates";
+
+const defaultRange = getCurrentMonthRange();
 
 export default function DashboardPage() {
-  const [dataInicio, setDataInicio] = useState("");
-  const [dataFim, setDataFim] = useState("");
+  const [dataInicio, setDataInicio] = useState(defaultRange.inicio);
+  const [dataFim, setDataFim] = useState(defaultRange.fim);
 
-  const params: Record<string, string> = {};
-  if (dataInicio) params.data_inicio = dataInicio;
-  if (dataFim) params.data_fim = dataFim;
+  const params: Record<string, string> = {
+    data_inicio: dataInicio,
+    data_fim: dataFim,
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard", params],
@@ -32,23 +36,47 @@ export default function DashboardPage() {
       despesas: parseFloat(item.despesas),
     })) ?? [];
 
+  function resetToCurrentMonth() {
+    const range = getCurrentMonthRange();
+    setDataInicio(range.inicio);
+    setDataFim(range.fim);
+  }
+
   return (
     <div>
-      <h2 className="mb-6 text-2xl font-semibold text-slate-800">Dashboard</h2>
+      <h2 className="mb-2 text-2xl font-semibold text-slate-800">Dashboard</h2>
 
-      <div className="mb-6 flex flex-wrap gap-3">
-        <input
-          type="date"
-          value={dataInicio}
-          onChange={(e) => setDataInicio(e.target.value)}
-          className="rounded border px-3 py-2 text-sm"
-        />
-        <input
-          type="date"
-          value={dataFim}
-          onChange={(e) => setDataFim(e.target.value)}
-          className="rounded border px-3 py-2 text-sm"
-        />
+      <div className="mb-6 rounded-lg border bg-white p-4 shadow-sm">
+        <p className="text-sm font-medium text-slate-700">Período das operações</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <label htmlFor="dash-inicio" className="flex items-center gap-2 text-sm text-slate-600">
+            De
+            <input
+              id="dash-inicio"
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className="rounded border px-3 py-2 text-sm"
+            />
+          </label>
+          <label htmlFor="dash-fim" className="flex items-center gap-2 text-sm text-slate-600">
+            Até
+            <input
+              id="dash-fim"
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className="rounded border px-3 py-2 text-sm"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={resetToCurrentMonth}
+            className="rounded border px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+          >
+            Mês atual
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -111,7 +139,7 @@ export default function DashboardPage() {
                   {data?.por_cidade.length === 0 && (
                     <tr>
                       <td colSpan={2} className="py-4 text-center text-slate-400">
-                        Sem dados
+                        Sem operações neste período
                       </td>
                     </tr>
                   )}
@@ -143,7 +171,7 @@ export default function DashboardPage() {
                   {data?.por_categoria.length === 0 && (
                     <tr>
                       <td colSpan={2} className="py-4 text-center text-slate-400">
-                        Sem dados
+                        Sem operações neste período
                       </td>
                     </tr>
                   )}

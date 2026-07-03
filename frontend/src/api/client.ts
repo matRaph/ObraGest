@@ -8,6 +8,7 @@ import type {
   Operacao,
   PaginatedResponse,
 } from "../types";
+import { saveBackupToLocalFolder } from "../utils/saveBackup";
 
 const api = axios.create({
   baseURL: "/api",
@@ -55,8 +56,18 @@ export const backupApi = {
     api.get<{ backups: BackupInfo[] }>("/backup/").then((r) => r.data.backups),
   create: (destino?: string) =>
     api.post<{ message: string; path: string }>("/backup/", { destino }).then((r) => r.data),
+  download: () => saveBackupToLocalFolder(),
   restore: (path: string) =>
     api.post<{ message: string }>("/backup/restore/", { path }).then((r) => r.data),
+  restoreFile: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api
+      .post<{ message: string }>("/backup/restore/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
+      .then((r) => r.data);
+  },
 };
 
 export function formatCurrency(value: string | number) {

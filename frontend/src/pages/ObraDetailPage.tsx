@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -11,12 +11,17 @@ import {
   tipoLabels,
 } from "../api/client";
 import CategoriaSelect from "../components/CategoriaSelect";
+import FieldLabel from "../components/FieldLabel";
+import ObraForm, { emptyObraForm, obraToForm, type ObraFormData } from "../components/ObraForm";
+import { DESCRICAO_MAX_LENGTH, limitText } from "../constants/limits";
 
 export default function ObraDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"operacoes" | "extrato">("operacoes");
   const [showForm, setShowForm] = useState(false);
+  const [editingObra, setEditingObra] = useState(false);
+  const [obraForm, setObraForm] = useState<ObraFormData>(emptyObraForm);
   const [form, setForm] = useState({
     categoria: "",
     valor: "",
@@ -45,6 +50,31 @@ export default function ObraDetailPage() {
   const { data: categorias } = useQuery({
     queryKey: ["categorias"],
     queryFn: () => categoriasApi.list(),
+  });
+
+  const { data: cidades = [] } = useQuery({
+    queryKey: ["cidades"],
+    queryFn: () => obrasApi.cidades(),
+  });
+
+  useEffect(() => {
+    if (obra) {
+      setObraForm(obraToForm(obra));
+    }
+  }, [obra]);
+
+  const updateObraMutation = useMutation({
+    mutationFn: () =>
+      obrasApi.update(id!, {
+        ...obraForm,
+        data_inicio: obraForm.data_inicio || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["obra", id] });
+      queryClient.invalidateQueries({ queryKey: ["obras"] });
+      queryClient.invalidateQueries({ queryKey: ["cidades"] });
+      setEditingObra(false);
+    },
   });
 
   const createMutation = useMutation({
@@ -85,28 +115,65 @@ export default function ObraDetailPage() {
       </Link>
 
       <div className="mb-6 rounded-lg border bg-white p-6 shadow-sm">
-        <h2 className="text-2xl font-semibold">{obra.nome}</h2>
-        <p className="text-slate-500">
-          <span className="mr-2 inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-            {obra.cidade}
-          </span>
-          {statusLabels[obra.status]}
-        </p>
-        {obra.descricao && <p className="mt-2 text-sm text-slate-600">{obra.descricao}</p>}
-        <div className="mt-4 grid grid-cols-3 gap-4">
-          <div className="rounded bg-green-50 p-3">
-            <p className="text-xs text-green-600">Receitas</p>
-            <p className="text-lg font-semibold text-green-700">{formatCurrency(obra.total_receitas)}</p>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-semibold">{obra.nome}</h2>
+            <p className="mt-1 text-slate-500">
+              <span className="mr-2 inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                {obra.cidade}
+              </span>
+              {statusLabels[obra.status]}
+              {obra.data_inicio && (
+                <span className="ml-2 text-xs text-slate-400">
+                  · Início: {formatDate(obra.data_inicio)}
+                </span>
+              )}
+            </p>
           </div>
-          <div className="rounded bg-red-50 p-3">
-            <p className="text-xs text-red-600">Despesas</p>
-            <p className="text-lg font-semibold text-red-700">{formatCurrency(obra.total_despesas)}</p>
-          </div>
-          <div className="rounded bg-slate-50 p-3">
-            <p className="text-xs text-slate-600">Saldo</p>
-            <p className="text-lg font-semibold">{formatCurrency(obra.saldo)}</p>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setObraForm(obraToForm(obra));
+              setEditingObra(!editingObra);
+            }}
+            className="rounded border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+          >
+            {editingObra ? "Cancelar edição" : "Editar obra"}
+          </button>
         </div>
+
+        {editingObra ? (
+          <ObraForm
+            form={obraForm}
+            onChange={setObraForm}
+            cities={cidades}
+            onSubmit={() => updateObraMutation.mutate()}
+            onCancel={() => {
+              setObraForm(obraToForm(obra));
+              setEditingObra(false);
+            }}
+            isPending={updateObraMutation.isPending}
+            submitLabel="Salvar alterações"
+          />
+        ) : (
+          <>
+            {obra.descricao && <p className="mb-4 text-sm text-slate-600">{obra.descricao}</p>}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="rounded bg-green-50 p-3">
+                <p className="text-xs text-green-600">Receitas</p>
+                <p className="text-lg font-semibold text-green-700">{formatCurrency(obra.total_receitas)}</p>
+              </div>
+              <div className="rounded bg-red-50 p-3">
+                <p className="text-xs text-red-600">Despesas</p>
+                <p className="text-lg font-semibold text-red-700">{formatCurrency(obra.total_despesas)}</p>
+              </div>
+              <div className="rounded bg-slate-50 p-3">
+                <p className="text-xs text-slate-600">Saldo</p>
+                <p className="text-lg font-semibold">{formatCurrency(obra.saldo)}</p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="mb-4 flex items-center justify-between">
@@ -152,29 +219,44 @@ export default function ObraDetailPage() {
               onChange={(categoria) => setForm({ ...form, categoria })}
               categorias={categorias?.results ?? []}
             />
-            <input
-              required
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="Valor"
-              value={form.valor}
-              onChange={(e) => setForm({ ...form, valor: e.target.value })}
-              className="rounded border px-3 py-2"
-            />
-            <input
-              required
-              type="date"
-              value={form.data}
-              onChange={(e) => setForm({ ...form, data: e.target.value })}
-              className="rounded border px-3 py-2"
-            />
-            <input
-              placeholder="Descrição"
-              value={form.descricao}
-              onChange={(e) => setForm({ ...form, descricao: e.target.value })}
-              className="rounded border px-3 py-2"
-            />
+            <div>
+              <FieldLabel htmlFor="op-valor" label="Valor" />
+              <input
+                id="op-valor"
+                required
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0,00"
+                value={form.valor}
+                onChange={(e) => setForm({ ...form, valor: e.target.value })}
+                className="w-full rounded border px-3 py-2"
+              />
+            </div>
+            <div>
+              <FieldLabel htmlFor="op-data" label="Data do lançamento" />
+              <input
+                id="op-data"
+                required
+                type="date"
+                value={form.data}
+                onChange={(e) => setForm({ ...form, data: e.target.value })}
+                className="w-full rounded border px-3 py-2"
+              />
+            </div>
+            <div>
+              <FieldLabel htmlFor="op-descricao" label="Descrição" optional />
+              <input
+                id="op-descricao"
+                maxLength={DESCRICAO_MAX_LENGTH}
+                placeholder="Detalhes do lançamento"
+                value={form.descricao}
+                onChange={(e) =>
+                  setForm({ ...form, descricao: limitText(e.target.value, DESCRICAO_MAX_LENGTH) })
+                }
+                className="w-full rounded border px-3 py-2"
+              />
+            </div>
           </div>
           <button
             type="submit"

@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    BackupDownloadView,
     BackupView,
     CategoriaViewSet,
     DashboardView,
@@ -21,5 +22,6 @@ urlpatterns = [
     path("health/", HealthView.as_view(), name="health"),
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
     path("backup/", BackupView.as_view(), name="backup"),
+    path("backup/download/", BackupDownloadView.as_view(), name="backup-download"),
     path("backup/restore/", RestoreBackupView.as_view(), name="backup-restore"),
 ]

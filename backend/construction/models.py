@@ -3,6 +3,9 @@ import uuid
 from django.db import models
 
 
+from .constants import DESCRICAO_MAX_LENGTH, NOME_MAX_LENGTH
+
+
 class ObraStatus(models.TextChoices):
     PLANEJADA = "planejada", "Planejada"
     EM_ANDAMENTO = "em_andamento", "Em andamento"
@@ -17,7 +20,7 @@ class TipoOperacao(models.TextChoices):
 
 class Obra(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    nome = models.CharField(max_length=200)
+    nome = models.CharField(max_length=NOME_MAX_LENGTH)
     cidade = models.CharField(max_length=100)
     status = models.CharField(
         max_length=20,
@@ -25,7 +28,7 @@ class Obra(models.Model):
         default=ObraStatus.PLANEJADA,
     )
     data_inicio = models.DateField(null=True, blank=True)
-    descricao = models.TextField(blank=True)
+    descricao = models.TextField(blank=True, max_length=DESCRICAO_MAX_LENGTH)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -62,7 +65,7 @@ class Operacao(models.Model):
     valor = models.DecimalField(max_digits=12, decimal_places=2)
     data = models.DateField()
     tipo = models.CharField(max_length=10, choices=TipoOperacao.choices)
-    descricao = models.TextField(blank=True)
+    descricao = models.TextField(blank=True, max_length=DESCRICAO_MAX_LENGTH)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
