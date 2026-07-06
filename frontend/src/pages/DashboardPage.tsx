@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -17,10 +17,15 @@ import {
 import {
   dashboardApi,
   formatCurrency,
+  formatDate,
   obrasApi,
   tipoPluralLabels,
 } from "../api/client";
-import { getCurrentMonthRange } from "../utils/dates";
+import {
+  getCurrentMonthRange,
+  getObraDashboardRange,
+  getTodayIso,
+} from "../utils/dates";
 import DateField from "../components/DateField";
 import type { TipoOperacao } from "../types";
 
@@ -67,6 +72,23 @@ export default function DashboardPage() {
   const obras = obrasData?.results ?? [];
   const obraSelecionada = obras.find((o) => o.id === obraParam);
 
+  useEffect(() => {
+    if (obraSelecionada) {
+      const range = getObraDashboardRange(obraSelecionada);
+      setDataInicio(range.inicio);
+      setDataFim(range.fim);
+    } else if (!obraParam) {
+      const range = getCurrentMonthRange();
+      setDataInicio(range.inicio);
+      setDataFim(range.fim);
+    }
+  }, [obraSelecionada?.id, obraParam]);
+
+  const periodoObra = useMemo(() => {
+    if (!obraSelecionada) return null;
+    return getObraDashboardRange(obraSelecionada);
+  }, [obraSelecionada]);
+
   const chartData =
     data?.por_obra.map((item) => ({
       nome: item.nome,
@@ -83,10 +105,16 @@ export default function DashboardPage() {
     .map((c) => ({ name: c.nome, value: parseFloat(c.total) }))
     .filter((d) => d.value > 0);
 
-  function resetToCurrentMonth() {
-    const range = getCurrentMonthRange();
-    setDataInicio(range.inicio);
-    setDataFim(range.fim);
+  function resetPeriodo() {
+    if (obraSelecionada) {
+      const range = getObraDashboardRange(obraSelecionada);
+      setDataInicio(range.inicio);
+      setDataFim(getTodayIso());
+    } else {
+      const range = getCurrentMonthRange();
+      setDataInicio(range.inicio);
+      setDataFim(range.fim);
+    }
   }
 
   function setObra(value: string) {
@@ -101,6 +129,13 @@ export default function DashboardPage() {
       <h2 className="mb-2 text-2xl font-semibold text-slate-800">
         {obraSelecionada ? `Dashboard · ${obraSelecionada.nome}` : "Dashboard geral"}
       </h2>
+      {obraSelecionada && periodoObra && (
+        <p className="mb-4 text-sm text-slate-500">
+          Período completo da obra: de{" "}
+          {formatDate(periodoObra.inicio)} até hoje. Ajuste as datas abaixo se
+          quiser filtrar um intervalo menor.
+        </p>
+      )}
 
       <div className="mb-6 rounded-lg border bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-end gap-4">
@@ -137,11 +172,24 @@ export default function DashboardPage() {
           </label>
           <button
             type="button"
-            onClick={resetToCurrentMonth}
+            onClick={resetPeriodo}
             className="rounded border px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
           >
-            Mês atual
+            {obraSelecionada ? "Desde o início" : "Mês atual"}
           </button>
+          {obraSelecionada && (
+            <button
+              type="button"
+              onClick={() => {
+                const range = getCurrentMonthRange();
+                setDataInicio(range.inicio);
+                setDataFim(range.fim);
+              }}
+              className="rounded border px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              Mês atual
+            </button>
+          )}
         </div>
       </div>
 
