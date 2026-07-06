@@ -1,5 +1,8 @@
 from decimal import Decimal
+import logging
 import zipfile
+
+logger = logging.getLogger(__name__)
 
 from django.db.models import (
     Case,
@@ -12,7 +15,9 @@ from django.db.models import (
     When,
 )
 from django.db.models.functions import Coalesce
+from django.conf import settings
 from django.http import FileResponse
+from django.shortcuts import redirect
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -33,6 +38,7 @@ from .services.backup import (
     restore_backup,
     restore_backup_file,
 )
+from .services import google_drive
 
 
 class CategoriaViewSet(viewsets.ModelViewSet):
@@ -353,3 +359,89 @@ class RestoreBackupView(APIView):
         except ValueError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"message": "Backup restaurado com sucesso."})
+
+
+class GoogleDriveStatusView(APIView):
+    def get(self, request):
+        return Response(google_drive.get_status())
+
+
+class GoogleDriveAuthView(APIView):
+    def get(self, request):
+        if not google_drive.is_configured():
+            return Response(
+                {
+                    "error": (
+                        "Credenciais do Google não configuradas. "
+                        "Coloque o arquivo JSON em data/google_client_secret.json."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        try:
+            return Response({"auth_url": google_drive.get_auth_url()})
+        except Exception as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GoogleDriveCallbackView(APIView):
+    def get(self, request):
+        error = request.GET.get("error")
+        if error:
+            logger.warning("Google OAuth recusado pelo usuário: %s", error)
+            return redirect(f"{settings.FRONTEND_URL}/configuracoes?google_drive=error")
+
+        code = request.GET.get("code")
+        if not code:
+            return redirect(f"{settings.FRONTEND_URL}/configuracoes?google_drive=error")
+
+        oauth_state = request.GET.get("state")
+        try:
+            google_drive.handle_oauth_callback(code, oauth_state)
+            google_drive.upload_backup(force=True)
+        except Exception:
+            logger.exception("Falha no callback OAuth do Google Drive.")
+            return redirect(f"{settings.FRONTEND_URL}/configuracoes?google_drive=error")
+
+        return redirect(f"{settings.FRONTEND_URL}/configuracoes?google_drive=connected")
+
+
+class GoogleDriveDisconnectView(APIView):
+    def post(self, request):
+        google_drive.disconnect()
+        return Response({"message": "Google Drive desconectado."})
+
+
+class GoogleDriveSyncView(APIView):
+    def post(self, request):
+        if not google_drive.is_connected():
+            return Response(
+                {"error": "Google Drive não conectado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            result = google_drive.upload_backup(force=True)
+        except Exception as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if result is None:
+            return Response({"message": "Nenhuma alteração detectada no banco de dados."})
+        return Response(
+            {"message": "Backup enviado para o Google Drive.", "backup": result},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class GoogleDriveRestoreView(APIView):
+    def post(self, request):
+        file_id = request.data.get("file_id")
+        if not file_id:
+            return Response(
+                {"error": "Informe o file_id do backup no Drive."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            google_drive.restore_from_drive(file_id)
+        except Exception as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message": "Backup restaurado do Google Drive com sucesso."})

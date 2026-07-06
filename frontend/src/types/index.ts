@@ -92,6 +92,26 @@ export interface BackupInfo {
   criado_em: string;
 }
 
+export interface DriveBackupInfo {
+  id: string;
+  nome: string;
+  tamanho: number;
+  criado_em: string;
+}
+
+export interface GoogleDriveStatus {
+  configured: boolean;
+  connected: boolean;
+  email: string | null;
+  last_backup_at: string | null;
+  last_restore_at: string | null;
+  last_backup_name: string | null;
+  interval_minutes: number;
+  max_backups: number;
+  backups: DriveBackupInfo[];
+  error?: string;
+}
+
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;

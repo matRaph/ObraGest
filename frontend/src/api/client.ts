@@ -1,13 +1,12 @@
 import axios from "axios";
 import type {
-  BackupInfo,
   Categoria,
   DashboardData,
+  GoogleDriveStatus,
   Obra,
   Operacao,
   PaginatedResponse,
 } from "../types";
-import { saveBackupToLocalFolder } from "../utils/saveBackup";
 
 const api = axios.create({
   baseURL: "/api",
@@ -57,23 +56,19 @@ export const dashboardApi = {
     api.get<DashboardData>("/dashboard/", { params }).then((r) => r.data),
 };
 
-export const backupApi = {
-  list: () =>
-    api.get<{ backups: BackupInfo[] }>("/backup/").then((r) => r.data.backups),
-  create: (destino?: string) =>
-    api.post<{ message: string; path: string }>("/backup/", { destino }).then((r) => r.data),
-  download: () => saveBackupToLocalFolder(),
-  restore: (path: string) =>
-    api.post<{ message: string }>("/backup/restore/", { path }).then((r) => r.data),
-  restoreFile: (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    return api
-      .post<{ message: string }>("/backup/restore/", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      })
-      .then((r) => r.data);
-  },
+export const googleDriveApi = {
+  status: () =>
+    api.get<GoogleDriveStatus>("/google-drive/status/").then((r) => r.data),
+  authUrl: () =>
+    api.get<{ auth_url: string }>("/google-drive/auth/").then((r) => r.data.auth_url),
+  disconnect: () =>
+    api.post<{ message: string }>("/google-drive/disconnect/").then((r) => r.data),
+  sync: () =>
+    api.post<{ message: string }>("/google-drive/sync/").then((r) => r.data),
+  restore: (fileId: string) =>
+    api
+      .post<{ message: string }>("/google-drive/restore/", { file_id: fileId })
+      .then((r) => r.data),
 };
 
 export function formatCurrency(value: string | number) {

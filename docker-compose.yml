@@ -6,8 +6,10 @@ services:
     volumes:
       - ./backend:/app
       - obragest_data:/app/data
+      - ./backend/google_client_secret.json:/app/data/google_client_secret.json:ro
     ports:
       - "8000:8000"
+      - "8080:8000"
     environment:
       - DEBUG=true
       - PYTHONUNBUFFERED=1
@@ -15,6 +17,9 @@ services:
       - OBRA_GEST_DATA_DIR=/app/data
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend
       - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - GOOGLE_DRIVE_REDIRECT_URI=http://localhost:8080/google/callback/
+      - FRONTEND_URL=http://localhost:3000
+      - OAUTHLIB_INSECURE_TRANSPORT=1
     develop:
       watch:
         - path: ./backend/pyproject.toml

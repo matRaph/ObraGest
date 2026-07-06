@@ -107,3 +107,23 @@ REST_FRAMEWORK = {
 
 BACKUP_DIR = DATA_DIR / "backups"
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+GOOGLE_OAUTH_CLIENT_SECRETS = Path(
+    os.environ.get("GOOGLE_OAUTH_CLIENT_SECRETS", DATA_DIR / "google_client_secret.json")
+)
+GOOGLE_DRIVE_TOKEN_PATH = DATA_DIR / "google_drive_token.json"
+GOOGLE_DRIVE_STATE_PATH = DATA_DIR / "google_drive_state.json"
+GOOGLE_DRIVE_REDIRECT_URI = os.environ.get(
+    "GOOGLE_DRIVE_REDIRECT_URI",
+    "http://localhost:8080/google/callback/",
+)
+GOOGLE_DRIVE_BACKUP_INTERVAL_MINUTES = int(
+    os.environ.get("GOOGLE_DRIVE_BACKUP_INTERVAL_MINUTES", "30")
+)
+GOOGLE_DRIVE_MAX_BACKUPS = int(os.environ.get("GOOGLE_DRIVE_MAX_BACKUPS", "20"))
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+GOOGLE_OAUTH_PENDING_DIR = DATA_DIR / "oauth_pending"
+GOOGLE_OAUTH_PENDING_DIR.mkdir(parents=True, exist_ok=True)
+
+if DEBUG:
+    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")

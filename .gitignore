@@ -27,3 +27,13 @@ Thumbs.db
 
 # Backups locais
 backups/
+
+# Google OAuth (não commitar credenciais)
+google_client_secret.json
+google_drive_token.json
+google_drive_state.json
+backend/google_client_secret.json
+**/data/google_client_secret.json
+**/data/google_drive_token.json
+**/data/google_drive_state.json
+**/data/oauth_pending/
