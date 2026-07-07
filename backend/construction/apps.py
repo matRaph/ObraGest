@@ -8,9 +8,9 @@ class ConstructionConfig(AppConfig):
     name = "construction"
 
     def ready(self) -> None:
-        if "runserver" not in sys.argv:
-            return
-        if os.environ.get("RUN_MAIN") != "true":
+        is_runserver = "runserver" in sys.argv and os.environ.get("RUN_MAIN") == "true"
+        is_launcher = os.environ.get("OBRAGEST_LAUNCHER") == "1"
+        if not is_runserver and not is_launcher:
             return
 
         from construction.services.google_drive import (

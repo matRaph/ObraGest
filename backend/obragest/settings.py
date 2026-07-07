@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -83,7 +84,13 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
+
+# Quando empacotado com PyInstaller, o frontend/dist fica dentro do bundle
+if getattr(sys, "frozen", False):
+    FRONTEND_DIST = Path(sys._MEIPASS) / "frontend" / "dist"
+else:
+    FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
+
 if FRONTEND_DIST.exists():
     STATICFILES_DIRS = [FRONTEND_DIST]
 WHITENOISE_ROOT = FRONTEND_DIST if FRONTEND_DIST.exists() else None
