@@ -58,7 +58,7 @@ export default function ObrasPage() {
         <h2 className="text-2xl font-semibold text-slate-800">Obras</h2>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded bg-[#09264c] px-4 py-2 text-sm font-medium text-white hover:bg-[#0d3470]"
         >
           {showForm ? "Cancelar" : "Nova obra"}
         </button>
@@ -120,7 +120,7 @@ export default function ObrasPage() {
           {data?.results.map((obra: Obra) => (
             <div key={obra.id} className="rounded-lg border bg-white p-4 shadow-sm">
               <div className="mb-2 flex items-start justify-between">
-                <Link to={`/obras/${obra.id}`} className="text-lg font-semibold text-blue-600 hover:underline">
+                <Link to={`/obras/${obra.id}`} className="text-lg font-semibold text-[#09264c] hover:underline">
                   {obra.nome}
                 </Link>
                 <button
@@ -132,7 +132,7 @@ export default function ObrasPage() {
                   Excluir
                 </button>
               </div>
-              <span className="mt-1 inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+              <span className="mt-1 inline-block rounded-full bg-[#dce4ef] px-2.5 py-0.5 text-xs font-medium text-[#09264c]">
                 {obra.cidade}
               </span>
               <span className="ml-1 mt-1 inline-block rounded bg-slate-100 px-2 py-0.5 text-xs">
@@ -141,7 +141,7 @@ export default function ObrasPage() {
               <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
                 <div>
                   <p className="text-slate-400">Receitas</p>
-                  <p className="font-medium text-green-600">{formatCurrency(obra.total_receitas)}</p>
+                  <p className="font-medium text-[#4f7c2f]">{formatCurrency(obra.total_receitas)}</p>
                 </div>
                 <div>
                   <p className="text-slate-400">Despesas</p>

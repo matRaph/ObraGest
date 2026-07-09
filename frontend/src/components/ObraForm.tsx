@@ -110,7 +110,7 @@ export default function ObraForm({
         <button
           type="submit"
           disabled={isPending}
-          className="rounded bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+          className="rounded bg-[#4f7c2f] px-4 py-2 text-sm text-white hover:bg-[#3e6225] disabled:opacity-50"
         >
           {isPending ? "Salvando..." : submitLabel}
         </button>

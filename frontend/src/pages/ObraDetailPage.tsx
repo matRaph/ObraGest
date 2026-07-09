@@ -10,6 +10,7 @@ import {
   statusLabels,
   tipoLabels,
 } from "../api/client";
+import { exportarObra } from "../utils/export";
 import CategoriaSelect, { SubcategoriaSelect } from "../components/CategoriaSelect";
 import DateField from "../components/DateField";
 import FieldLabel from "../components/FieldLabel";
@@ -18,9 +19,9 @@ import { DESCRICAO_MAX_LENGTH, limitText } from "../constants/limits";
 import type { Categoria, TipoOperacao } from "../types";
 
 const tipoValorClasses: Record<TipoOperacao, string> = {
-  receita: "text-green-600",
+  receita: "text-[#4f7c2f]",
   despesa: "text-red-600",
-  investimento: "text-indigo-600",
+  investimento: "text-[#3a414d]",
 };
 
 const emptyForm = {
@@ -44,6 +45,7 @@ export default function ObraDetailPage() {
   const [filtroCategoria, setFiltroCategoria] = useState("");
   const [filtroSubcategoria, setFiltroSubcategoria] = useState("");
   const [filtroPago, setFiltroPago] = useState("");
+  const [exportando, setExportando] = useState(false);
 
   const { data: obra, isLoading } = useQuery({
     queryKey: ["obra", id],
@@ -89,6 +91,21 @@ export default function ObraDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["operacoes", id] });
     queryClient.invalidateQueries({ queryKey: ["obra", id] });
     queryClient.invalidateQueries({ queryKey: ["obras"] });
+  }
+
+  async function handleExportar() {
+    if (!obra || !id) return;
+    setExportando(true);
+    try {
+      // Busca todas as operações (com filtros ativos, sem paginação)
+      const todasOperacoes = await operacoesApi.listByObra(id, {
+        ...listParams,
+        page_size: "10000",
+      });
+      exportarObra(obra, todasOperacoes.results);
+    } finally {
+      setExportando(false);
+    }
   }
 
   const updateObraMutation = useMutation({
@@ -139,7 +156,7 @@ export default function ObraDetailPage() {
 
   return (
     <div>
-      <Link to="/" className="mb-4 inline-block text-sm text-blue-600 hover:underline">
+      <Link to="/" className="mb-4 inline-block text-sm text-[#09264c] hover:underline">
         ← Voltar para obras
       </Link>
 
@@ -148,7 +165,7 @@ export default function ObraDetailPage() {
           <div>
             <h2 className="text-2xl font-semibold">{obra.nome}</h2>
             <p className="mt-1 text-slate-500">
-              <span className="mr-2 inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+              <span className="mr-2 inline-block rounded-full bg-[#dce4ef] px-2.5 py-0.5 text-xs font-medium text-[#09264c]">
                 {obra.cidade}
               </span>
               {statusLabels[obra.status]}
@@ -166,6 +183,14 @@ export default function ObraDetailPage() {
             >
               Ver dashboard
             </Link>
+            <button
+              type="button"
+              onClick={handleExportar}
+              disabled={exportando}
+              className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {exportando ? "Exportando..." : "Exportar planilha"}
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -196,9 +221,9 @@ export default function ObraDetailPage() {
           <>
             {obra.descricao && <p className="mb-4 text-sm text-slate-600">{obra.descricao}</p>}
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <div className="rounded bg-green-50 p-3">
-                <p className="text-xs text-green-600">Receitas</p>
-                <p className="text-lg font-semibold text-green-700">
+              <div className="rounded bg-[#eef5e9] p-3">
+                <p className="text-xs text-[#4f7c2f]">Receitas</p>
+                <p className="text-lg font-semibold text-[#3e6225]">
                   {formatCurrency(obra.total_receitas)}
                 </p>
               </div>
@@ -213,9 +238,9 @@ export default function ObraDetailPage() {
                   </p>
                 )}
               </div>
-              <div className="rounded bg-indigo-50 p-3">
-                <p className="text-xs text-indigo-600">Investimentos</p>
-                <p className="text-lg font-semibold text-indigo-700">
+              <div className="rounded bg-[#f0f1f3] p-3">
+                <p className="text-xs text-[#3a414d]">Investimentos</p>
+                <p className="text-lg font-semibold text-[#3a414d]">
                   {formatCurrency(obra.total_investimentos)}
                 </p>
               </div>
@@ -233,7 +258,7 @@ export default function ObraDetailPage() {
         <h3 className="text-lg font-semibold text-slate-800">Operações</h3>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+          className="rounded bg-[#09264c] px-4 py-2 text-sm text-white hover:bg-[#0d3470]"
         >
           {showForm ? "Cancelar" : "Nova operação"}
         </button>
@@ -313,7 +338,7 @@ export default function ObraDetailPage() {
           <button
             type="submit"
             disabled={createMutation.isPending}
-            className="mt-3 rounded bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+            className="mt-3 rounded bg-[#4f7c2f] px-4 py-2 text-sm text-white hover:bg-[#3e6225] disabled:opacity-50"
           >
             Salvar operação
           </button>
@@ -450,7 +475,7 @@ export default function ObraDetailPage() {
                           }
                           disabled={togglePagoMutation.isPending}
                           className={`text-xs hover:underline ${
-                            naoPaga ? "text-green-600" : "text-amber-600"
+                            naoPaga ? "text-[#4f7c2f]" : "text-amber-600"
                           }`}
                         >
                           {naoPaga ? "Marcar paga" : "Marcar não paga"}

@@ -73,7 +73,7 @@ export default function CityInput({
       )}
 
       {isNewCity && (
-        <p className="mt-1 text-xs text-blue-600">
+        <p className="mt-1 text-xs text-[#09264c]">
           Nova cidade: &quot;{value.trim()}&quot; será criada ao salvar
         </p>
       )}

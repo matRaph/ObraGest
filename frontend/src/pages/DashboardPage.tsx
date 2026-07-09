@@ -21,6 +21,7 @@ import {
   obrasApi,
   tipoPluralLabels,
 } from "../api/client";
+import { exportarDashboard } from "../utils/export";
 import {
   getCurrentMonthRange,
   getObraDashboardRange,
@@ -124,11 +125,31 @@ export default function DashboardPage() {
     setSearchParams(next);
   }
 
+  function handleExportar() {
+    if (!data) return;
+    exportarDashboard(data, {
+      obraNome: obraSelecionada?.nome,
+      dataInicio,
+      dataFim,
+    });
+  }
+
   return (
     <div>
-      <h2 className="mb-2 text-2xl font-semibold text-slate-800">
-        {obraSelecionada ? `Dashboard · ${obraSelecionada.nome}` : "Dashboard geral"}
-      </h2>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-2xl font-semibold text-slate-800">
+          {obraSelecionada ? `Dashboard · ${obraSelecionada.nome}` : "Dashboard geral"}
+        </h2>
+        {data && (
+          <button
+            type="button"
+            onClick={handleExportar}
+            className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-100"
+          >
+            Exportar relatório
+          </button>
+        )}
+      </div>
       {obraSelecionada && periodoObra && (
         <p className="mb-4 text-sm text-slate-500">
           Período completo da obra: de{" "}
@@ -200,7 +221,7 @@ export default function DashboardPage() {
           <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border bg-white p-4 shadow-sm">
               <p className="text-sm text-slate-500">Receitas</p>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-2xl font-bold text-[#4f7c2f]">
                 {formatCurrency(data?.total_receitas ?? "0")}
               </p>
             </div>
@@ -217,7 +238,7 @@ export default function DashboardPage() {
             </div>
             <div className="rounded-lg border bg-white p-4 shadow-sm">
               <p className="text-sm text-slate-500">Investimentos</p>
-              <p className="text-2xl font-bold text-indigo-600">
+              <p className="text-2xl font-bold text-[#3a414d]">
                 {formatCurrency(data?.total_investimentos ?? "0")}
               </p>
             </div>
@@ -237,8 +258,8 @@ export default function DashboardPage() {
                     onClick={() => setTipoGrafico(t)}
                     className={`rounded px-3 py-1 text-sm ${
                       tipoGrafico === t
-                        ? "bg-slate-900 text-white"
-                        : "text-slate-600 hover:bg-slate-100"
+                    ? "bg-[#09264c] text-white"
+                    : "text-slate-600 hover:bg-slate-100"
                     }`}
                   >
                     {tipoPluralLabels[t]}

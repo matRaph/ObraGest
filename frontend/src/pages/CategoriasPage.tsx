@@ -8,14 +8,14 @@ const TIPOS: TipoOperacao[] = ["despesa", "receita", "investimento"];
 
 const tipoStyles: Record<TipoOperacao, string> = {
   despesa: "border-red-200",
-  receita: "border-green-200",
-  investimento: "border-indigo-200",
+  receita: "border-[#d4e8c6]",
+  investimento: "border-[#d4d6da]",
 };
 
 const tipoHeaderStyles: Record<TipoOperacao, string> = {
   despesa: "text-red-700",
-  receita: "text-green-700",
-  investimento: "text-indigo-700",
+  receita: "text-[#3e6225]",
+  investimento: "text-[#3a414d]",
 };
 
 export default function CategoriasPage() {
@@ -120,7 +120,7 @@ export default function CategoriasPage() {
                 onChange={(e) => setEditing({ id: cat.id, nome: e.target.value })}
                 className="flex-1 rounded border px-2 py-1 text-sm"
               />
-              <button type="submit" className="rounded bg-green-600 px-3 py-1 text-xs text-white">
+              <button type="submit" className="rounded bg-[#4f7c2f] px-3 py-1 text-xs text-white">
                 Salvar
               </button>
               <button
@@ -265,7 +265,7 @@ export default function CategoriasPage() {
             <button
               type="submit"
               disabled={createCategoria.isPending}
-              className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded bg-[#09264c] px-4 py-2 text-sm text-white hover:bg-[#0d3470] disabled:opacity-50"
             >
               Adicionar
             </button>

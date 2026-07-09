@@ -135,7 +135,7 @@ export default function SettingsPage() {
           <button
             onClick={() => connectMutation.mutate()}
             disabled={connectMutation.isPending}
-            className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded bg-[#09264c] px-4 py-2 text-sm text-white hover:bg-[#0d3470] disabled:opacity-50"
           >
             {connectMutation.isPending ? "Conectando..." : "Conectar Google Drive"}
           </button>
@@ -143,7 +143,7 @@ export default function SettingsPage() {
 
         {!isLoading && driveStatus?.connected && (
           <div className="space-y-4">
-            <div className="rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            <div className="rounded border border-[#d4e8c6] bg-[#eef5e9] px-4 py-3 text-sm text-[#3e6225]">
               Conectado como <strong>{driveStatus.email}</strong>
             </div>
 
@@ -170,7 +170,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => syncMutation.mutate()}
                 disabled={syncMutation.isPending}
-                className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded bg-[#09264c] px-4 py-2 text-sm text-white hover:bg-[#0d3470] disabled:opacity-50"
               >
                 {syncMutation.isPending ? "Sincronizando..." : "Sincronizar agora"}
               </button>
@@ -219,7 +219,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {message && <p className="mt-4 text-sm text-green-600">{message}</p>}
+        {message && <p className="mt-4 text-sm text-[#4f7c2f]">{message}</p>}
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
       </div>
     </div>
