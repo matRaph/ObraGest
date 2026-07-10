@@ -1,6 +1,6 @@
 name: Build ObraGest.exe
 
-# Dispara ao criar uma tag no formato v1.0.0, v1.2.3, etc.
+# Triggers when a tag matching v1.0.0, v1.2.3, etc. is pushed.
 on:
   push:
     tags:
@@ -8,37 +8,34 @@ on:
 
 jobs:
   build:
-    name: Gerar executável Windows
+    name: Build Windows executable
     runs-on: windows-latest
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
-      - name: Checkout do repositório
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Node.js + build do frontend React ─────────────────────────────────
-      - name: Configurar Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Instalar dependências do frontend
+      - name: Install frontend dependencies
         working-directory: frontend
-        run: npm install
+        run: npm ci
 
-      - name: Compilar frontend React
+      - name: Build React frontend
         working-directory: frontend
         run: npm run build
 
-      # ── 3. Python + dependências do backend ──────────────────────────────────
-      - name: Configurar Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
-      - name: Instalar dependências do backend
+      - name: Install backend dependencies
         working-directory: backend
         run: |
           pip install `
@@ -54,8 +51,7 @@ jobs:
             pystray `
             pillow
 
-      # ── 4. Coletar arquivos estáticos do Django ───────────────────────────────
-      - name: Gerar static files do Django
+      - name: Collect Django static files
         working-directory: backend
         env:
           OBRA_GEST_DATA_DIR: data
@@ -64,25 +60,23 @@ jobs:
           SECRET_KEY: build-temp-key-github-actions
         run: python manage.py collectstatic --noinput
 
-      # ── 5. PyInstaller → ObraGest.exe ────────────────────────────────────────
-      - name: Compilar executável com PyInstaller
+      - name: Build executable with PyInstaller
         working-directory: backend
         run: pyinstaller launcher.spec --clean --noconfirm
 
-      # ── 6. Publicar como Release no GitHub ───────────────────────────────────
-      - name: Criar Release e publicar ObraGest.exe
+      - name: Create release and upload ObraGest.exe
         uses: softprops/action-gh-release@v2
         with:
           name: "ObraGest ${{ github.ref_name }}"
           body: |
             ## ObraGest ${{ github.ref_name }}
 
-            ### Como instalar
-            1. Baixe o arquivo `ObraGest.exe` abaixo
-            2. Clique com o botão direito → **Executar como administrador**
-            3. Aguarde a janela de configuração e acesse **http://obragest.com.br**
+            ### Installation
+            1. Download `ObraGest.exe` below
+            2. Right-click → **Run as administrator**
+            3. Wait for the setup window and open **http://obragest.com.br**
 
-            > Os dados ficam salvos em `C:\Users\<seu_usuario>\ObraGest\data\`
+            > Data is stored in `C:\Users\<your_user>\ObraGest\data\`
           files: backend/dist/ObraGest.exe
           draft: false
           prerelease: false
