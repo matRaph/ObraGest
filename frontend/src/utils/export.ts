@@ -1,5 +1,5 @@
 import type { DashboardData, Obra, Operacao } from "../types";
-import { formatCurrency, statusLabels, tipoLabels } from "../api/client";
+import { statusLabels, tipoLabels } from "../api/client";
 
 // Gera e faz download de um arquivo CSV com BOM UTF-8 (compatível com Excel pt-BR)
 function downloadCsv(filename: string, rows: string[][]): void {
