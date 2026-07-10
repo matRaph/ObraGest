@@ -10,6 +10,8 @@ jobs:
   build:
     name: Build Windows executable
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -18,7 +20,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
@@ -62,7 +64,9 @@ jobs:
 
       - name: Build executable with PyInstaller
         working-directory: backend
-        run: pyinstaller launcher.spec --clean --noconfirm
+        run: |
+          pyinstaller launcher.spec --clean --noconfirm
+          mv dist/ObraGest.exe "dist/ObraGest_${{ github.ref_name }}.exe"
 
       - name: Create release and upload ObraGest.exe
         uses: softprops/action-gh-release@v2
@@ -72,11 +76,11 @@ jobs:
             ## ObraGest ${{ github.ref_name }}
 
             ### Installation
-            1. Download `ObraGest.exe` below
+            1. Download `ObraGest_${{ github.ref_name }}.exe` below
             2. Right-click → **Run as administrator**
             3. Wait for the setup window and open **http://obragest.com.br**
 
             > Data is stored in `C:\Users\<your_user>\ObraGest\data\`
-          files: backend/dist/ObraGest.exe
+          files: backend/dist/ObraGest_${{ github.ref_name }}.exe
           draft: false
           prerelease: false
