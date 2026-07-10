@@ -28,24 +28,10 @@ import {
   getTodayIso,
 } from "../utils/dates";
 import DateField from "../components/DateField";
+import { brandColors, chartColors } from "../constants/theme";
 import type { TipoOperacao } from "../types";
 
 const defaultRange = getCurrentMonthRange();
-
-const COLORS = [
-  "#2563eb",
-  "#16a34a",
-  "#dc2626",
-  "#d97706",
-  "#7c3aed",
-  "#0891b2",
-  "#db2777",
-  "#65a30d",
-  "#ea580c",
-  "#4f46e5",
-  "#0d9488",
-  "#9333ea",
-];
 
 export default function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -137,21 +123,21 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-semibold text-slate-800">
+        <h2 className="text-2xl font-semibold text-brand-gray">
           {obraSelecionada ? `Dashboard · ${obraSelecionada.nome}` : "Dashboard geral"}
         </h2>
         {data && (
           <button
             type="button"
             onClick={handleExportar}
-            className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-100"
+            className="rounded border border-brand-green-light bg-brand-green-bg px-3 py-1.5 text-sm text-brand-green-dark hover:bg-brand-green-light"
           >
             Exportar relatório
           </button>
         )}
       </div>
       {obraSelecionada && periodoObra && (
-        <p className="mb-4 text-sm text-slate-500">
+        <p className="mb-4 text-sm text-brand-gray-muted">
           Período completo da obra: de{" "}
           {formatDate(periodoObra.inicio)} até hoje. Ajuste as datas abaixo se
           quiser filtrar um intervalo menor.
@@ -160,7 +146,7 @@ export default function DashboardPage() {
 
       <div className="mb-6 rounded-lg border bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-end gap-4">
-          <label className="flex flex-col gap-1 text-sm text-slate-600">
+          <label className="flex flex-col gap-1 text-sm text-brand-gray">
             Obra
             <select
               value={obraParam}
@@ -175,7 +161,7 @@ export default function DashboardPage() {
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-600">
+          <label className="flex flex-col gap-1 text-sm text-brand-gray">
             De
             <DateField
               value={dataInicio}
@@ -183,7 +169,7 @@ export default function DashboardPage() {
               className="text-sm"
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-600">
+          <label className="flex flex-col gap-1 text-sm text-brand-gray">
             Até
             <DateField
               value={dataFim}
@@ -194,7 +180,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={resetPeriodo}
-            className="rounded border px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            className="rounded border px-3 py-2 text-sm text-brand-gray hover:bg-brand-gray-light"
           >
             {obraSelecionada ? "Desde o início" : "Mês atual"}
           </button>
@@ -206,7 +192,7 @@ export default function DashboardPage() {
                 setDataInicio(range.inicio);
                 setDataFim(range.fim);
               }}
-              className="rounded border px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              className="rounded border px-3 py-2 text-sm text-brand-gray hover:bg-brand-gray-light"
             >
               Mês atual
             </button>
@@ -215,18 +201,18 @@ export default function DashboardPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-slate-500">Carregando...</p>
+        <p className="text-brand-gray-muted">Carregando...</p>
       ) : (
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Receitas</p>
-              <p className="text-2xl font-bold text-[#4f7c2f]">
+              <p className="text-sm text-brand-gray-muted">Receitas</p>
+              <p className="text-2xl font-bold text-brand-green">
                 {formatCurrency(data?.total_receitas ?? "0")}
               </p>
             </div>
             <div className="rounded-lg border bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Despesas pagas</p>
+              <p className="text-sm text-brand-gray-muted">Despesas pagas</p>
               <p className="text-2xl font-bold text-red-600">
                 {formatCurrency(data?.total_despesas ?? "0")}
               </p>
@@ -237,20 +223,20 @@ export default function DashboardPage() {
               )}
             </div>
             <div className="rounded-lg border bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Investimentos</p>
-              <p className="text-2xl font-bold text-[#3a414d]">
+              <p className="text-sm text-brand-gray-muted">Investimentos</p>
+              <p className="text-2xl font-bold text-brand-gray">
                 {formatCurrency(data?.total_investimentos ?? "0")}
               </p>
             </div>
             <div className="rounded-lg border bg-white p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Saldo</p>
+              <p className="text-sm text-brand-gray-muted">Saldo</p>
               <p className="text-2xl font-bold">{formatCurrency(data?.saldo ?? "0")}</p>
             </div>
           </div>
 
           <div className="mb-6 rounded-lg border bg-white p-4 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h3 className="font-medium text-slate-700">Distribuição por categoria</h3>
+              <h3 className="font-medium text-brand-gray">Distribuição por categoria</h3>
               <div className="flex gap-1 rounded border p-1">
                 {(["despesa", "receita", "investimento"] as TipoOperacao[]).map((t) => (
                   <button
@@ -258,8 +244,8 @@ export default function DashboardPage() {
                     onClick={() => setTipoGrafico(t)}
                     className={`rounded px-3 py-1 text-sm ${
                       tipoGrafico === t
-                    ? "bg-[#09264c] text-white"
-                    : "text-slate-600 hover:bg-slate-100"
+                    ? "bg-brand-blue text-white"
+                    : "text-brand-gray hover:bg-brand-gray-light"
                     }`}
                   >
                     {tipoPluralLabels[t]}
@@ -269,7 +255,7 @@ export default function DashboardPage() {
             </div>
 
             {pieData.length === 0 ? (
-              <p className="py-8 text-center text-slate-400">
+              <p className="py-8 text-center text-brand-gray-muted">
                 Sem {tipoPluralLabels[tipoGrafico].toLowerCase()} no período.
               </p>
             ) : (
@@ -289,7 +275,7 @@ export default function DashboardPage() {
                       labelLine={false}
                     >
                       {pieData.map((_, index) => (
-                        <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                        <Cell key={index} fill={chartColors[index % chartColors.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(v: number) => formatCurrency(v)} />
@@ -300,10 +286,10 @@ export default function DashboardPage() {
                   {categoriasDoTipo.map((cat, index) => (
                     <div key={cat.categoria_id}>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 font-medium text-slate-700">
+                        <span className="flex items-center gap-2 font-medium text-brand-gray">
                           <span
                             className="inline-block h-3 w-3 rounded-full"
-                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                            style={{ backgroundColor: chartColors[index % chartColors.length] }}
                           />
                           {cat.nome}
                         </span>
@@ -312,7 +298,7 @@ export default function DashboardPage() {
                       {cat.subcategorias.length > 1 ||
                       (cat.subcategorias.length === 1 &&
                         cat.subcategorias[0].subcategoria_id) ? (
-                        <ul className="mt-1 space-y-0.5 border-l pl-4 text-xs text-slate-500">
+                        <ul className="mt-1 space-y-0.5 border-l pl-4 text-xs text-brand-gray-muted">
                           {cat.subcategorias.map((sub) => (
                             <li
                               key={sub.subcategoria_id ?? "none"}
@@ -333,7 +319,7 @@ export default function DashboardPage() {
 
           {!obraParam && chartData.length > 0 && (
             <div className="mb-6 rounded-lg border bg-white p-4 shadow-sm">
-              <h3 className="mb-4 font-medium text-slate-700">
+              <h3 className="mb-4 font-medium text-brand-gray">
                 Receitas vs Despesas por obra
               </h3>
               <ResponsiveContainer width="100%" height={300}>
@@ -343,7 +329,7 @@ export default function DashboardPage() {
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip formatter={(v: number) => formatCurrency(v)} />
                   <Legend />
-                  <Bar dataKey="receitas" fill="#16a34a" name="Receitas" />
+                  <Bar dataKey="receitas" fill={brandColors.green} name="Receitas" />
                   <Bar dataKey="despesas" fill="#dc2626" name="Despesas pagas" />
                 </BarChart>
               </ResponsiveContainer>
@@ -352,10 +338,10 @@ export default function DashboardPage() {
 
           {!obraParam && (
             <div className="rounded-lg border bg-white p-4 shadow-sm">
-              <h3 className="mb-3 font-medium text-slate-700">Por cidade</h3>
+              <h3 className="mb-3 font-medium text-brand-gray">Por cidade</h3>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-slate-400">
+                  <tr className="text-left text-brand-gray-muted">
                     <th className="pb-2">Cidade</th>
                     <th className="pb-2 text-right">Saldo</th>
                   </tr>
@@ -371,7 +357,7 @@ export default function DashboardPage() {
                   ))}
                   {data?.por_cidade.length === 0 && (
                     <tr>
-                      <td colSpan={2} className="py-4 text-center text-slate-400">
+                      <td colSpan={2} className="py-4 text-center text-brand-gray-muted">
                         Sem operações neste período
                       </td>
                     </tr>

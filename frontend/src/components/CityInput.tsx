@@ -58,7 +58,7 @@ export default function CityInput({
             <li key={city}>
               <button
                 type="button"
-                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-brand-gray-light"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   onChange(city);
@@ -73,7 +73,7 @@ export default function CityInput({
       )}
 
       {isNewCity && (
-        <p className="mt-1 text-xs text-[#09264c]">
+        <p className="mt-1 text-xs text-brand-blue">
           Nova cidade: &quot;{value.trim()}&quot; será criada ao salvar
         </p>
       )}

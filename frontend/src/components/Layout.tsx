@@ -11,12 +11,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-[#09264c] text-white shadow">
+    <div className="min-h-screen bg-[#f7f8f9]">
+      <header className="border-b border-brand-gray-border bg-white shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <Link to="/" className="flex items-center gap-3 hover:opacity-90">
-            <img src="/logo.png" alt="ObraGest" className="h-9 w-auto" />
-            <span className="text-xl font-bold tracking-tight">ObraGest</span>
+            <img
+              src="/logo-header.png"
+              srcSet="/logo-header.png 1x, /logo-header@2x.png 2x"
+              alt=""
+              className="h-12 w-auto"
+              width={144}
+              height={96}
+              decoding="async"
+            />
+            <span className="text-xl font-bold tracking-tight text-brand-blue">ObraGest</span>
           </Link>
           <nav className="flex gap-1">
             {links.map((link) => (
@@ -25,8 +33,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 to={link.to}
                 className={`rounded px-3 py-1.5 text-sm font-medium transition ${
                   location.pathname === link.to
-                    ? "bg-[#0d3470]"
-                    : "hover:bg-[#0d3470]"
+                    ? "bg-brand-blue text-white"
+                    : "text-brand-gray hover:bg-brand-gray-light"
                 }`}
               >
                 {link.label}

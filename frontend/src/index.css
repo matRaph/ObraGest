@@ -2,7 +2,88 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+@layer base {
+  :root {
+    --brand-green: #4f7c2f;
+    --brand-green-dark: #3e6225;
+    --brand-blue: #09264c;
+    --brand-blue-dark: #0d3470;
+    --brand-gray: #3a414d;
+    --brand-gray-muted: #6d7580;
+    --brand-gray-light: #f0f1f3;
+    --brand-gray-border: #d4d6da;
+  }
+
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: var(--brand-gray);
+    background-color: #f7f8f9;
+  }
+}
+
+@layer utilities {
+  .bg-brand-green {
+    background-color: var(--brand-green);
+  }
+  .bg-brand-green-dark {
+    background-color: var(--brand-green-dark);
+  }
+  .bg-brand-green-bg {
+    background-color: #eef5e9;
+  }
+  .bg-brand-green-light {
+    background-color: #d4e8c6;
+  }
+  .bg-brand-blue {
+    background-color: var(--brand-blue);
+  }
+  .bg-brand-blue-dark {
+    background-color: var(--brand-blue-dark);
+  }
+  .bg-brand-blue-light {
+    background-color: #dce4ef;
+  }
+  .bg-brand-gray-light {
+    background-color: var(--brand-gray-light);
+  }
+  .text-brand-green {
+    color: var(--brand-green);
+  }
+  .text-brand-green-dark {
+    color: var(--brand-green-dark);
+  }
+  .text-brand-blue {
+    color: var(--brand-blue);
+  }
+  .text-brand-gray {
+    color: var(--brand-gray);
+  }
+  .text-brand-gray-muted {
+    color: var(--brand-gray-muted);
+  }
+  .text-brand-gray-border {
+    color: var(--brand-gray-border);
+  }
+  .border-brand-green-light {
+    border-color: #d4e8c6;
+  }
+  .border-brand-gray-border {
+    border-color: var(--brand-gray-border);
+  }
+  .hover\:bg-brand-green-dark:hover {
+    background-color: var(--brand-green-dark);
+  }
+  .hover\:bg-brand-blue-dark:hover {
+    background-color: var(--brand-blue-dark);
+  }
+  .hover\:bg-brand-green-light:hover {
+    background-color: #d4e8c6;
+  }
+  .hover\:bg-brand-gray-light:hover {
+    background-color: var(--brand-gray-light);
+  }
+  .hover\:text-brand-gray:hover {
+    color: var(--brand-gray);
+  }
 }

@@ -19,9 +19,9 @@ import { DESCRICAO_MAX_LENGTH, limitText } from "../constants/limits";
 import type { Categoria, TipoOperacao } from "../types";
 
 const tipoValorClasses: Record<TipoOperacao, string> = {
-  receita: "text-[#4f7c2f]",
+  receita: "text-brand-green",
   despesa: "text-red-600",
-  investimento: "text-[#3a414d]",
+  investimento: "text-brand-gray",
 };
 
 const emptyForm = {
@@ -149,14 +149,14 @@ export default function ObraDetailPage() {
     onSuccess: invalidateAll,
   });
 
-  if (isLoading) return <p className="text-slate-500">Carregando...</p>;
+  if (isLoading) return <p className="text-brand-gray-muted">Carregando...</p>;
   if (!obra) return <p className="text-red-500">Obra não encontrada.</p>;
 
   const temPendentes = parseFloat(obra.total_despesas_pendentes) > 0;
 
   return (
     <div>
-      <Link to="/" className="mb-4 inline-block text-sm text-[#09264c] hover:underline">
+      <Link to="/" className="mb-4 inline-block text-sm text-brand-blue hover:underline">
         ← Voltar para obras
       </Link>
 
@@ -164,13 +164,13 @@ export default function ObraDetailPage() {
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-2xl font-semibold">{obra.nome}</h2>
-            <p className="mt-1 text-slate-500">
-              <span className="mr-2 inline-block rounded-full bg-[#dce4ef] px-2.5 py-0.5 text-xs font-medium text-[#09264c]">
+            <p className="mt-1 text-brand-gray-muted">
+              <span className="mr-2 inline-block rounded-full bg-brand-blue-light px-2.5 py-0.5 text-xs font-medium text-brand-blue">
                 {obra.cidade}
               </span>
               {statusLabels[obra.status]}
               {obra.data_inicio && (
-                <span className="ml-2 text-xs text-slate-400">
+                <span className="ml-2 text-xs text-brand-gray-muted">
                   · Início: {formatDate(obra.data_inicio)}
                 </span>
               )}
@@ -179,7 +179,7 @@ export default function ObraDetailPage() {
           <div className="flex gap-2">
             <Link
               to={`/dashboard?obra=${obra.id}`}
-              className="rounded border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+              className="rounded border px-3 py-1.5 text-sm text-brand-gray hover:bg-brand-gray-light"
             >
               Ver dashboard
             </Link>
@@ -187,7 +187,7 @@ export default function ObraDetailPage() {
               type="button"
               onClick={handleExportar}
               disabled={exportando}
-              className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+              className="rounded border border-brand-green-light bg-brand-green-bg px-3 py-1.5 text-sm text-brand-green-dark hover:bg-brand-green-light disabled:opacity-50"
             >
               {exportando ? "Exportando..." : "Exportar planilha"}
             </button>
@@ -197,7 +197,7 @@ export default function ObraDetailPage() {
                 setObraForm(obraToForm(obra));
                 setEditingObra(!editingObra);
               }}
-              className="rounded border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+              className="rounded border px-3 py-1.5 text-sm text-brand-gray hover:bg-brand-gray-light"
             >
               {editingObra ? "Cancelar edição" : "Editar obra"}
             </button>
@@ -219,11 +219,11 @@ export default function ObraDetailPage() {
           />
         ) : (
           <>
-            {obra.descricao && <p className="mb-4 text-sm text-slate-600">{obra.descricao}</p>}
+            {obra.descricao && <p className="mb-4 text-sm text-brand-gray">{obra.descricao}</p>}
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <div className="rounded bg-[#eef5e9] p-3">
-                <p className="text-xs text-[#4f7c2f]">Receitas</p>
-                <p className="text-lg font-semibold text-[#3e6225]">
+              <div className="rounded bg-brand-green-bg p-3">
+                <p className="text-xs text-brand-green">Receitas</p>
+                <p className="text-lg font-semibold text-brand-green-dark">
                   {formatCurrency(obra.total_receitas)}
                 </p>
               </div>
@@ -238,16 +238,16 @@ export default function ObraDetailPage() {
                   </p>
                 )}
               </div>
-              <div className="rounded bg-[#f0f1f3] p-3">
-                <p className="text-xs text-[#3a414d]">Investimentos</p>
-                <p className="text-lg font-semibold text-[#3a414d]">
+              <div className="rounded bg-brand-gray-light p-3">
+                <p className="text-xs text-brand-gray">Investimentos</p>
+                <p className="text-lg font-semibold text-brand-gray">
                   {formatCurrency(obra.total_investimentos)}
                 </p>
               </div>
-              <div className="rounded bg-slate-50 p-3">
-                <p className="text-xs text-slate-600">Saldo</p>
+              <div className="rounded bg-brand-gray-light p-3">
+                <p className="text-xs text-brand-gray">Saldo</p>
                 <p className="text-lg font-semibold">{formatCurrency(obra.saldo)}</p>
-                <p className="mt-1 text-[11px] text-slate-400">Não inclui investimentos</p>
+                <p className="mt-1 text-[11px] text-brand-gray-muted">Não inclui investimentos</p>
               </div>
             </div>
           </>
@@ -255,10 +255,10 @@ export default function ObraDetailPage() {
       </div>
 
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-800">Operações</h3>
+        <h3 className="text-lg font-semibold text-brand-gray">Operações</h3>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="rounded bg-[#09264c] px-4 py-2 text-sm text-white hover:bg-[#0d3470]"
+          className="rounded bg-brand-blue px-4 py-2 text-sm text-white hover:bg-brand-blue-dark"
         >
           {showForm ? "Cancelar" : "Nova operação"}
         </button>
@@ -321,7 +321,7 @@ export default function ObraDetailPage() {
               />
             </div>
             {selectedTipo === "despesa" && (
-              <label className="flex items-center gap-2 md:col-span-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 md:col-span-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-brand-gray">
                 <input
                   type="checkbox"
                   checked={form.pago}
@@ -329,7 +329,7 @@ export default function ObraDetailPage() {
                   className="h-4 w-4"
                 />
                 Despesa já paga
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-brand-gray-muted">
                   (se desmarcada, não entra no saldo nem nas despesas pagas)
                 </span>
               </label>
@@ -338,7 +338,7 @@ export default function ObraDetailPage() {
           <button
             type="submit"
             disabled={createMutation.isPending}
-            className="mt-3 rounded bg-[#4f7c2f] px-4 py-2 text-sm text-white hover:bg-[#3e6225] disabled:opacity-50"
+            className="mt-3 rounded bg-brand-green px-4 py-2 text-sm text-white hover:bg-brand-green-dark disabled:opacity-50"
           >
             Salvar operação
           </button>
@@ -381,7 +381,7 @@ export default function ObraDetailPage() {
           value={filtroSubcategoria}
           onChange={(e) => setFiltroSubcategoria(e.target.value)}
           disabled={!filtroCategoriaObj || filtroCategoriaObj.subcategorias.length === 0}
-          className="rounded border px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+          className="rounded border px-3 py-2 text-sm disabled:bg-brand-gray-light disabled:text-brand-gray-muted"
         >
           <option value="">Todas as subcategorias</option>
           {filtroCategoriaObj?.subcategorias.map((s) => (
@@ -408,7 +408,7 @@ export default function ObraDetailPage() {
               setFiltroSubcategoria("");
               setFiltroPago("");
             }}
-            className="rounded border px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            className="rounded border px-3 py-2 text-sm text-brand-gray hover:bg-brand-gray-light"
           >
             Limpar filtros
           </button>
@@ -417,7 +417,7 @@ export default function ObraDetailPage() {
 
       <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-brand-gray-light text-left">
             <tr>
               <th className="px-4 py-3">Data</th>
               <th className="px-4 py-3">Categoria</th>
@@ -440,7 +440,7 @@ export default function ObraDetailPage() {
                   <td className="px-4 py-3">
                     {op.categoria_nome}
                     {op.subcategoria_nome && (
-                      <span className="text-slate-400"> › {op.subcategoria_nome}</span>
+                      <span className="text-brand-gray-muted"> › {op.subcategoria_nome}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">{op.descricao || "—"}</td>
@@ -452,10 +452,10 @@ export default function ObraDetailPage() {
                           ● Não paga
                         </span>
                       ) : (
-                        <span className="text-xs text-slate-400">Paga</span>
+                        <span className="text-xs text-brand-gray-muted">Paga</span>
                       )
                     ) : (
-                      <span className="text-xs text-slate-300">—</span>
+                      <span className="text-xs text-brand-gray-border">—</span>
                     )}
                   </td>
                   <td
@@ -475,7 +475,7 @@ export default function ObraDetailPage() {
                           }
                           disabled={togglePagoMutation.isPending}
                           className={`text-xs hover:underline ${
-                            naoPaga ? "text-[#4f7c2f]" : "text-amber-600"
+                            naoPaga ? "text-brand-green" : "text-amber-600"
                           }`}
                         >
                           {naoPaga ? "Marcar paga" : "Marcar não paga"}
@@ -496,7 +496,7 @@ export default function ObraDetailPage() {
             })}
             {operacoes?.results.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-brand-gray-muted">
                   Nenhuma operação encontrada.
                 </td>
               </tr>

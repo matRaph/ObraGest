@@ -111,17 +111,17 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <h2 className="mb-6 text-2xl font-semibold text-slate-800">Configurações</h2>
+      <h2 className="mb-6 text-2xl font-semibold text-brand-gray">Configurações</h2>
 
       <div className="rounded-lg border bg-white p-6 shadow-sm">
-        <h3 className="mb-2 font-medium">Backup no Google Drive</h3>
-        <p className="mb-4 text-sm text-slate-500">
+        <h3 className="mb-2 font-medium text-brand-gray">Backup no Google Drive</h3>
+        <p className="mb-4 text-sm text-brand-gray-muted">
           Conecte sua conta Google para backup automático na nuvem. O sistema
           envia cópias do banco de dados periodicamente e mantém os últimos
           backups na pasta &quot;ObraGest Backups&quot; do seu Drive.
         </p>
 
-        {isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
+        {isLoading && <p className="text-sm text-brand-gray-muted">Carregando...</p>}
 
         {!isLoading && driveStatus && !driveStatus.configured && (
           <p className="text-sm text-amber-600">
@@ -135,7 +135,7 @@ export default function SettingsPage() {
           <button
             onClick={() => connectMutation.mutate()}
             disabled={connectMutation.isPending}
-            className="rounded bg-[#09264c] px-4 py-2 text-sm text-white hover:bg-[#0d3470] disabled:opacity-50"
+            className="rounded bg-brand-blue px-4 py-2 text-sm text-white hover:bg-brand-blue-dark disabled:opacity-50"
           >
             {connectMutation.isPending ? "Conectando..." : "Conectar Google Drive"}
           </button>
@@ -143,25 +143,25 @@ export default function SettingsPage() {
 
         {!isLoading && driveStatus?.connected && (
           <div className="space-y-4">
-            <div className="rounded border border-[#d4e8c6] bg-[#eef5e9] px-4 py-3 text-sm text-[#3e6225]">
+            <div className="rounded border border-brand-green-light bg-brand-green-bg px-4 py-3 text-sm text-brand-green-dark">
               Conectado como <strong>{driveStatus.email}</strong>
             </div>
 
-            <dl className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+            <dl className="grid gap-2 text-sm text-brand-gray sm:grid-cols-2">
               <div>
-                <dt className="text-slate-500">Último backup</dt>
+                <dt className="text-brand-gray-muted">Último backup</dt>
                 <dd>{formatDateTime(driveStatus.last_backup_at)}</dd>
               </div>
               <div>
-                <dt className="text-slate-500">Intervalo automático</dt>
+                <dt className="text-brand-gray-muted">Intervalo automático</dt>
                 <dd>A cada {driveStatus.interval_minutes} minutos</dd>
               </div>
               <div>
-                <dt className="text-slate-500">Última restauração</dt>
+                <dt className="text-brand-gray-muted">Última restauração</dt>
                 <dd>{formatDateTime(driveStatus.last_restore_at)}</dd>
               </div>
               <div>
-                <dt className="text-slate-500">Backups mantidos</dt>
+                <dt className="text-brand-gray-muted">Backups mantidos</dt>
                 <dd>Até {driveStatus.max_backups} arquivos</dd>
               </div>
             </dl>
@@ -170,14 +170,14 @@ export default function SettingsPage() {
               <button
                 onClick={() => syncMutation.mutate()}
                 disabled={syncMutation.isPending}
-                className="rounded bg-[#09264c] px-4 py-2 text-sm text-white hover:bg-[#0d3470] disabled:opacity-50"
+                className="rounded bg-brand-blue px-4 py-2 text-sm text-white hover:bg-brand-blue-dark disabled:opacity-50"
               >
                 {syncMutation.isPending ? "Sincronizando..." : "Sincronizar agora"}
               </button>
               <button
                 onClick={handleDisconnect}
                 disabled={disconnectMutation.isPending}
-                className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                className="rounded border border-brand-gray-border px-4 py-2 text-sm text-brand-gray hover:bg-brand-gray-light disabled:opacity-50"
               >
                 Desconectar
               </button>
@@ -189,7 +189,7 @@ export default function SettingsPage() {
 
             {driveStatus.backups.length > 0 && (
               <div>
-                <h4 className="mb-2 text-sm font-medium text-slate-700">
+                <h4 className="mb-2 text-sm font-medium text-brand-gray">
                   Backups na nuvem
                 </h4>
                 <ul className="divide-y rounded border">
@@ -199,8 +199,8 @@ export default function SettingsPage() {
                       className="flex items-center justify-between gap-4 px-4 py-3 text-sm"
                     >
                       <div>
-                        <p className="font-medium text-slate-800">{backup.nome}</p>
-                        <p className="text-slate-500">
+                        <p className="font-medium text-brand-gray">{backup.nome}</p>
+                        <p className="text-brand-gray-muted">
                           {formatDateTime(backup.criado_em)} · {formatBytes(backup.tamanho)}
                         </p>
                       </div>
@@ -219,7 +219,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {message && <p className="mt-4 text-sm text-[#4f7c2f]">{message}</p>}
+        {message && <p className="mt-4 text-sm text-brand-green">{message}</p>}
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
       </div>
     </div>

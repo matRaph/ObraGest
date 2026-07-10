@@ -110,7 +110,7 @@ export default function ObraForm({
         <button
           type="submit"
           disabled={isPending}
-          className="rounded bg-[#4f7c2f] px-4 py-2 text-sm text-white hover:bg-[#3e6225] disabled:opacity-50"
+          className="rounded bg-brand-green px-4 py-2 text-sm text-white hover:bg-brand-green-dark disabled:opacity-50"
         >
           {isPending ? "Salvando..." : submitLabel}
         </button>
@@ -118,7 +118,7 @@ export default function ObraForm({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded border px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            className="rounded border px-4 py-2 text-sm text-brand-gray-muted hover:bg-brand-gray-light"
           >
             Cancelar
           </button>

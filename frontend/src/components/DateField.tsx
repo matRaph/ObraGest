@@ -125,7 +125,7 @@ export default function DateField({
     segments.year.length === 4 &&
     segmentsToIso(segments.day, segments.month, segments.year) === null;
 
-  const borderClass = isInvalid ? "border-red-400" : "border-slate-300";
+  const borderClass = isInvalid ? "border-red-400" : "border-brand-gray-border";
 
   return (
     <div
@@ -147,10 +147,10 @@ export default function DateField({
         onChange={(e) => handleSegmentChange("day", e.target.value, 2, monthRef)}
         onKeyDown={(e) => handleKeyDown(e, "day")}
         onPaste={handlePaste}
-        className="w-7 border-0 bg-transparent p-0 text-center text-sm outline-none placeholder:text-slate-300"
+        className="w-7 border-0 bg-transparent p-0 text-center text-sm outline-none placeholder:text-brand-gray-border"
         aria-label="Dia"
       />
-      <span className="text-slate-400">/</span>
+      <span className="text-brand-gray-muted">/</span>
       <input
         ref={monthRef}
         type="text"
@@ -161,10 +161,10 @@ export default function DateField({
         onChange={(e) => handleSegmentChange("month", e.target.value, 2, yearRef)}
         onKeyDown={(e) => handleKeyDown(e, "month", dayRef)}
         onPaste={handlePaste}
-        className="w-7 border-0 bg-transparent p-0 text-center text-sm outline-none placeholder:text-slate-300"
+        className="w-7 border-0 bg-transparent p-0 text-center text-sm outline-none placeholder:text-brand-gray-border"
         aria-label="Mês"
       />
-      <span className="text-slate-400">/</span>
+      <span className="text-brand-gray-muted">/</span>
       <input
         ref={yearRef}
         type="text"
@@ -175,12 +175,12 @@ export default function DateField({
         onChange={(e) => handleSegmentChange("year", e.target.value, 4)}
         onKeyDown={(e) => handleKeyDown(e, "year", monthRef)}
         onPaste={handlePaste}
-        className="w-11 border-0 bg-transparent p-0 text-center text-sm outline-none placeholder:text-slate-300"
+        className="w-11 border-0 bg-transparent p-0 text-center text-sm outline-none placeholder:text-brand-gray-border"
         aria-label="Ano"
       />
 
       <div className="relative ml-auto flex-shrink-0">
-        <span className="pointer-events-none flex p-1 text-slate-400">
+        <span className="pointer-events-none flex p-1 text-brand-gray-muted">
           <CalendarIcon />
         </span>
         <input

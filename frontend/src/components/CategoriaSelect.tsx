@@ -95,7 +95,7 @@ export function SubcategoriaSelect({
         value={value}
         disabled={disabled || !hasOptions}
         onChange={(e) => onChange(e.target.value)}
-        className={`${className} disabled:bg-slate-50 disabled:text-slate-400`}
+        className={`${className} disabled:bg-brand-gray-light disabled:text-brand-gray-muted`}
       >
         <option value="">
           {hasOptions ? placeholder : "Nenhuma subcategoria"}

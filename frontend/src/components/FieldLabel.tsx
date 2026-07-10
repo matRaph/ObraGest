@@ -6,10 +6,10 @@ interface FieldLabelProps {
 
 export default function FieldLabel({ htmlFor, label, optional }: FieldLabelProps) {
   return (
-    <label htmlFor={htmlFor} className="mb-1 block text-sm font-medium text-slate-700">
+    <label htmlFor={htmlFor} className="mb-1 block text-sm font-medium text-brand-gray">
       {label}
       {optional && (
-        <span className="ml-1 text-xs font-normal text-slate-400">(opcional)</span>
+        <span className="ml-1 text-xs font-normal text-brand-gray-muted">(opcional)</span>
       )}
     </label>
   );

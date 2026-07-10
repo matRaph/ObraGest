@@ -8,14 +8,14 @@ const TIPOS: TipoOperacao[] = ["despesa", "receita", "investimento"];
 
 const tipoStyles: Record<TipoOperacao, string> = {
   despesa: "border-red-200",
-  receita: "border-[#d4e8c6]",
-  investimento: "border-[#d4d6da]",
+  receita: "border-brand-green-light",
+  investimento: "border-brand-gray-border",
 };
 
 const tipoHeaderStyles: Record<TipoOperacao, string> = {
   despesa: "text-red-700",
-  receita: "text-[#3e6225]",
-  investimento: "text-[#3a414d]",
+  receita: "text-brand-green-dark",
+  investimento: "text-brand-gray",
 };
 
 export default function CategoriasPage() {
@@ -120,13 +120,13 @@ export default function CategoriasPage() {
                 onChange={(e) => setEditing({ id: cat.id, nome: e.target.value })}
                 className="flex-1 rounded border px-2 py-1 text-sm"
               />
-              <button type="submit" className="rounded bg-[#4f7c2f] px-3 py-1 text-xs text-white">
+              <button type="submit" className="rounded bg-brand-green px-3 py-1 text-xs text-white">
                 Salvar
               </button>
               <button
                 type="button"
                 onClick={() => setEditing(null)}
-                className="rounded border px-3 py-1 text-xs text-slate-600"
+                className="rounded border px-3 py-1 text-xs text-brand-gray"
               >
                 Cancelar
               </button>
@@ -134,9 +134,9 @@ export default function CategoriasPage() {
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <span className="font-medium text-slate-800">{cat.nome}</span>
+                <span className="font-medium text-brand-gray">{cat.nome}</span>
                 {cat.padrao && (
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-500">
+                  <span className="rounded bg-brand-gray-light px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-brand-gray-muted">
                     padrão
                   </span>
                 )}
@@ -144,7 +144,7 @@ export default function CategoriasPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setEditing({ id: cat.id, nome: cat.nome })}
-                  className="text-xs text-slate-500 hover:text-slate-700"
+                  className="text-xs text-brand-gray-muted hover:text-brand-gray"
                 >
                   Renomear
                 </button>
@@ -175,7 +175,7 @@ export default function CategoriasPage() {
           <ul className="mt-3 space-y-1 border-l pl-3">
             {cat.subcategorias.map((sub) => (
               <li key={sub.id} className="flex items-center justify-between text-sm">
-                <span className="text-slate-600">{sub.nome}</span>
+                <span className="text-brand-gray">{sub.nome}</span>
                 <button
                   onClick={() => {
                     if (confirm(`Excluir a subcategoria "${sub.nome}"?`)) {
@@ -210,7 +210,7 @@ export default function CategoriasPage() {
           />
           <button
             type="submit"
-            className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+            className="rounded border border-brand-gray-border px-3 py-1 text-xs text-brand-gray hover:bg-brand-gray-light"
           >
             + Subcategoria
           </button>
@@ -221,8 +221,8 @@ export default function CategoriasPage() {
 
   return (
     <div>
-      <h2 className="mb-2 text-2xl font-semibold text-slate-800">Categorias</h2>
-      <p className="mb-6 text-sm text-slate-500">
+      <h2 className="mb-2 text-2xl font-semibold text-brand-gray">Categorias</h2>
+      <p className="mb-6 text-sm text-brand-gray-muted">
         Gerencie suas categorias e subcategorias de operação. Excluir mantém as
         operações já lançadas (exclusão suave).
       </p>
@@ -265,7 +265,7 @@ export default function CategoriasPage() {
             <button
               type="submit"
               disabled={createCategoria.isPending}
-              className="rounded bg-[#09264c] px-4 py-2 text-sm text-white hover:bg-[#0d3470] disabled:opacity-50"
+              className="rounded bg-brand-blue px-4 py-2 text-sm text-white hover:bg-brand-blue-dark disabled:opacity-50"
             >
               Adicionar
             </button>
@@ -280,7 +280,7 @@ export default function CategoriasPage() {
       )}
 
       {isLoading ? (
-        <p className="text-slate-500">Carregando...</p>
+        <p className="text-brand-gray-muted">Carregando...</p>
       ) : (
         <div className="space-y-8">
           {grupos.map(({ tipo, itens }) => (
@@ -289,7 +289,7 @@ export default function CategoriasPage() {
                 {tipoPluralLabels[tipo]}
               </h3>
               {itens.length === 0 ? (
-                <p className="text-sm text-slate-400">Nenhuma categoria deste tipo.</p>
+                <p className="text-sm text-brand-gray-muted">Nenhuma categoria deste tipo.</p>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
                   {itens.map(renderCategoriaCard)}
