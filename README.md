@@ -141,7 +141,7 @@ Gerar o Base64:
 base64 -w 0 certificado.pfx | pbcopy   # ou: xclip / wl-copy
 ```
 
-Sem esses secrets, o job de release **falha** de propósito (não publica `.exe` sem assinatura).
+Sem esses secrets, o release **continua** e publica o `.exe` **sem assinatura** (o Windows pode bloquear). Com os secrets configurados, o Actions assina automaticamente.
 
 ### 3. Publicar
 
