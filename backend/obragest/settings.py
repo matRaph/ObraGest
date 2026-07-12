@@ -93,7 +93,11 @@ else:
 
 if FRONTEND_DIST.exists():
     STATICFILES_DIRS = [FRONTEND_DIST]
-WHITENOISE_ROOT = FRONTEND_DIST if FRONTEND_DIST.exists() else None
+    WHITENOISE_ROOT = FRONTEND_DIST
+    # Serve index.html em "/" (necessário para o SPA)
+    WHITENOISE_INDEX_FILE = True
+else:
+    WHITENOISE_ROOT = None
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -110,6 +114,15 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "obragest.pagination.FlexiblePageNumberPagination",
     "PAGE_SIZE": 50,
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    # No exe (DEBUG=false) evita TemplateDoesNotExist do browsable API
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ]
+    + (
+        ["rest_framework.renderers.BrowsableAPIRenderer"]
+        if DEBUG
+        else []
+    ),
 }
 
 BACKUP_DIR = DATA_DIR / "backups"

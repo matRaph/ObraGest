@@ -10,7 +10,14 @@
 # Executar com:
 #   pyinstaller launcher.spec --clean --noconfirm
 
+from PyInstaller.utils.hooks import collect_data_files
+
 block_cipher = None
+
+# Templates/static do DRF e do Django admin (evita TemplateDoesNotExist no exe)
+_extra_datas = collect_data_files("rest_framework") + collect_data_files(
+    "django.contrib.admin"
+)
 
 a = Analysis(
     ['launcher.py'],
@@ -26,7 +33,7 @@ a = Analysis(
         ('obragest', 'obragest'),
         # Templates
         ('templates', 'templates'),
-    ],
+    ] + _extra_datas,
     hiddenimports=[
         'django',
         'django.template.defaulttags',
@@ -44,6 +51,12 @@ a = Analysis(
         'whitenoise',
         'whitenoise.middleware',
         'whitenoise.storage',
+        'obragest',
+        'obragest.settings',
+        'obragest.urls',
+        'obragest.wsgi',
+        'obragest.spa',
+        'obragest.pagination',
         'construction',
         'construction.apps',
         'construction.models',

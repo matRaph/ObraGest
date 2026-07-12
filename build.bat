@@ -35,6 +35,11 @@ echo.
 echo [2/5] Compilando frontend React...
 call npm run build
 if errorlevel 1 goto :error
+
+if not exist "dist\index.html" (
+    echo [ERRO] frontend\dist\index.html nao encontrado apos o build.
+    goto :error
+)
 cd ..
 
 echo.

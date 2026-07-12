@@ -91,7 +91,18 @@ def run_django_setup() -> None:
     import django
     django.setup()
 
+    from django.conf import settings
     from django.core.management import call_command
+
+    frontend_dist = settings.FRONTEND_DIST
+    if not frontend_dist.exists() or not (frontend_dist / "index.html").is_file():
+        print(
+            f"[AVISO] Frontend não encontrado em {frontend_dist}. "
+            "Recompile com build.bat (npm run build)."
+        )
+    else:
+        print(f"Frontend OK: {frontend_dist}")
+
     print("Verificando banco de dados...")
     call_command("migrate", "--noinput", verbosity=0)
     call_command("seed_categories", verbosity=0)
