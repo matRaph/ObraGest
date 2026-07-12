@@ -70,9 +70,36 @@ jobs:
           SECRET_KEY: build-temp-key-github-actions
         run: python manage.py collectstatic --noinput
 
+      - name: Write Google OAuth client secrets
+        working-directory: backend
+        env:
+          GOOGLE_CLIENT_SECRET_JSON: ${{ secrets.GOOGLE_CLIENT_SECRET_JSON }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GOOGLE_CLIENT_SECRET_JSON)) {
+            Write-Error @"
+          Secret GOOGLE_CLIENT_SECRET_JSON is required.
+          Paste the full Google Cloud OAuth client JSON into that repository secret
+          so it is embedded in ObraGest.exe (clients do not configure it).
+          "@
+            exit 1
+          }
+          # utf8NoBOM avoids a BOM that breaks google-auth JSON parsing
+          $utf8 = New-Object System.Text.UTF8Encoding $false
+          [IO.File]::WriteAllText(
+            (Join-Path (Get-Location) "google_client_secret.json"),
+            $env:GOOGLE_CLIENT_SECRET_JSON,
+            $utf8
+          )
+          Write-Host "Wrote google_client_secret.json for bundling."
+
       - name: Build executable with PyInstaller
         working-directory: backend
         run: |
+          if (!(Test-Path "google_client_secret.json")) {
+            Write-Error "google_client_secret.json missing before PyInstaller"
+            exit 1
+          }
           pyinstaller launcher.spec --clean --noconfirm
           mv dist/ObraGest.exe "dist/ObraGest_${{ github.ref_name }}.exe"
 
@@ -150,7 +177,7 @@ jobs:
             3. Wait for the setup window and open **http://obragest.com.br**
 
             If Windows blocks the app (SmartScreen), choose **More info → Run anyway**.
-            Google Drive credentials go in `C:\Users\<your_user>\ObraGest\data\google_client_secret.json`.
+            In **Configurações**, click **Conectar Google Drive** and authorize your account (one-time).
 
             > Data is stored in `C:\Users\<your_user>\ObraGest\data\`
           files: backend/dist/ObraGest_${{ github.ref_name }}.exe

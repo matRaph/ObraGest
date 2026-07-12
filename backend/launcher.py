@@ -81,8 +81,14 @@ def configure_environment() -> None:
     os.environ["FRONTEND_URL"] = "http://obragest.com.br"
     os.environ["GOOGLE_DRIVE_REDIRECT_URI"] = "http://obragest.com.br/google/callback/"
     os.environ["OBRAGEST_LAUNCHER"] = "1"
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
     if "SECRET_KEY" not in os.environ:
         os.environ["SECRET_KEY"] = "obragest-local-key-troque-em-producao-xYz9@2!"
+
+    # Credenciais OAuth embutidas no bundle (cliente não precisa configurar)
+    bundled_secrets = base_dir / "google_client_secret.json"
+    if bundled_secrets.is_file():
+        os.environ["GOOGLE_OAUTH_CLIENT_SECRETS"] = str(bundled_secrets)
 
     sys.path.insert(0, str(base_dir))
 
@@ -102,6 +108,15 @@ def run_django_setup() -> None:
         )
     else:
         print(f"Frontend OK: {frontend_dist}")
+
+    secrets = Path(settings.GOOGLE_OAUTH_CLIENT_SECRETS)
+    if secrets.is_file():
+        print(f"Google OAuth OK: {secrets}")
+    else:
+        print(
+            f"[AVISO] Google OAuth ausente ({secrets}). "
+            "Backup no Drive ficará indisponível neste build."
+        )
 
     print("Verificando banco de dados...")
     call_command("migrate", "--noinput", verbosity=0)

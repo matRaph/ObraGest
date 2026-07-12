@@ -11,6 +11,7 @@
 #   pyinstaller launcher.spec --clean --noconfirm
 
 from PyInstaller.utils.hooks import collect_data_files
+import os
 
 block_cipher = None
 
@@ -19,21 +20,27 @@ _extra_datas = collect_data_files("rest_framework") + collect_data_files(
     "django.contrib.admin"
 )
 
+_datas = [
+    # Frontend React compilado
+    ('../frontend/dist', 'frontend/dist'),
+    # Arquivos estáticos do Django admin (gerados por collectstatic)
+    ('staticfiles', 'staticfiles'),
+    # Código da aplicação Django
+    ('construction', 'construction'),
+    ('obragest', 'obragest'),
+    # Templates
+    ('templates', 'templates'),
+]
+
+# OAuth do Google embutido no .exe (gerado no CI a partir do secret)
+if os.path.isfile('google_client_secret.json'):
+    _datas.append(('google_client_secret.json', '.'))
+
 a = Analysis(
     ['launcher.py'],
     pathex=['.'],
     binaries=[],
-    datas=[
-        # Frontend React compilado
-        ('../frontend/dist', 'frontend/dist'),
-        # Arquivos estáticos do Django admin (gerados por collectstatic)
-        ('staticfiles', 'staticfiles'),
-        # Código da aplicação Django
-        ('construction', 'construction'),
-        ('obragest', 'obragest'),
-        # Templates
-        ('templates', 'templates'),
-    ] + _extra_datas,
+    datas=_datas + _extra_datas,
     hiddenimports=[
         'django',
         'django.template.defaulttags',
