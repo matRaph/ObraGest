@@ -91,14 +91,14 @@ jobs:
 
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_BASE64) -or
               [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PASSWORD)) {
-            Write-Error @"
-          Code signing secrets missing.
-          Add repository secrets:
-            - WINDOWS_CERT_BASE64  (PFX encoded as base64)
-            - WINDOWS_CERT_PASSWORD (PFX password)
+            Write-Warning @"
+          Code signing secrets missing — publishing UNSIGNED exe.
+          Windows SmartScreen may block it. To sign, add:
+            - WINDOWS_CERT_BASE64
+            - WINDOWS_CERT_PASSWORD
           See README.md section 'Release Windows / Code signing'.
           "@
-            exit 1
+            exit 0
           }
 
           $pfxPath = Join-Path $env:RUNNER_TEMP "obragest-codesign.pfx"
@@ -149,7 +149,8 @@ jobs:
             2. Right-click → **Run as administrator**
             3. Wait for the setup window and open **http://obragest.com.br**
 
-            The executable is Authenticode-signed. If Windows still warns on first run, choose **More info → Run anyway**.
+            If Windows blocks the app (SmartScreen), choose **More info → Run anyway**.
+            Google Drive credentials go in `C:\Users\<your_user>\ObraGest\data\google_client_secret.json`.
 
             > Data is stored in `C:\Users\<your_user>\ObraGest\data\`
           files: backend/dist/ObraGest_${{ github.ref_name }}.exe
