@@ -128,8 +128,18 @@ REST_FRAMEWORK = {
 BACKUP_DIR = DATA_DIR / "backups"
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
+
+def _default_google_oauth_secrets() -> Path:
+    """No .exe, usa o JSON embutido no bundle; senão, pasta de dados."""
+    if getattr(sys, "frozen", False):
+        bundled = Path(sys._MEIPASS) / "google_client_secret.json"
+        if bundled.is_file():
+            return bundled
+    return DATA_DIR / "google_client_secret.json"
+
+
 GOOGLE_OAUTH_CLIENT_SECRETS = Path(
-    os.environ.get("GOOGLE_OAUTH_CLIENT_SECRETS", DATA_DIR / "google_client_secret.json")
+    os.environ.get("GOOGLE_OAUTH_CLIENT_SECRETS", str(_default_google_oauth_secrets()))
 )
 GOOGLE_DRIVE_TOKEN_PATH = DATA_DIR / "google_drive_token.json"
 GOOGLE_DRIVE_STATE_PATH = DATA_DIR / "google_drive_state.json"
@@ -145,5 +155,6 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 GOOGLE_OAUTH_PENDING_DIR = DATA_DIR / "oauth_pending"
 GOOGLE_OAUTH_PENDING_DIR.mkdir(parents=True, exist_ok=True)
 
-if DEBUG:
+# OAuth local / hosts (http://obragest.com.br) exige transporte inseguro no oauthlib
+if DEBUG or os.environ.get("OBRAGEST_LAUNCHER") == "1":
     os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")

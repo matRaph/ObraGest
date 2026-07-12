@@ -59,6 +59,10 @@ if errorlevel 1 goto :error
 
 echo.
 echo [5/5] Compilando executavel com PyInstaller...
+if not exist "google_client_secret.json" (
+    echo [AVISO] google_client_secret.json ausente — o .exe nao tera Google Drive embutido.
+    echo         Para builds de distribuicao, copie o JSON OAuth para backend\google_client_secret.json
+)
 pyinstaller launcher.spec --clean --noconfirm
 if errorlevel 1 goto :error
 
