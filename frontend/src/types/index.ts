@@ -103,6 +103,7 @@ export interface GoogleDriveStatus {
   configured: boolean;
   connected: boolean;
   email: string | null;
+  credentials_path: string;
   last_backup_at: string | null;
   last_restore_at: string | null;
   last_backup_name: string | null;

@@ -493,10 +493,12 @@ def maybe_restore_on_startup() -> bool:
 def get_status() -> dict:
     token = _load_token_data()
     state = _load_state()
+    secrets_path = _client_secrets_path()
     status = {
         "configured": is_configured(),
         "connected": token is not None,
         "email": token.get("email") if token else None,
+        "credentials_path": str(secrets_path.resolve()),
         "last_backup_at": state.get("last_backup_at"),
         "last_restore_at": state.get("last_restore_at"),
         "last_backup_name": state.get("last_backup_name"),
