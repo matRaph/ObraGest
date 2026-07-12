@@ -134,9 +134,11 @@ No repositório: **Settings → Secrets and variables → Actions**:
 
 | Secret | Obrigatório | Conteúdo |
 |--------|-------------|----------|
-| `GOOGLE_CLIENT_SECRET_JSON` | Sim | Conteúdo completo do JSON OAuth do Google Cloud (client secret) |
+| `GOOGLE_CLIENT_SECRET_JSON` | Recomendado | Conteúdo completo do JSON OAuth do Google Cloud (client secret) |
 | `WINDOWS_CERT_BASE64` | Não | Arquivo `.pfx` em Base64 |
 | `WINDOWS_CERT_PASSWORD` | Não | Senha do PFX |
+
+Sem `GOOGLE_CLIENT_SECRET_JSON`, o release publica o `.exe`, mas o Google Drive fica indisponível até você configurar o secret e gerar um novo build.
 
 No Google Cloud Console, nas credenciais OAuth (tipo **Aplicativo da Web**), inclua a URI:
 

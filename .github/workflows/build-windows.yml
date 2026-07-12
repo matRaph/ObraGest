@@ -77,12 +77,11 @@ jobs:
         shell: pwsh
         run: |
           if ([string]::IsNullOrWhiteSpace($env:GOOGLE_CLIENT_SECRET_JSON)) {
-            Write-Error @"
-          Secret GOOGLE_CLIENT_SECRET_JSON is required.
-          Paste the full Google Cloud OAuth client JSON into that repository secret
-          so it is embedded in ObraGest.exe (clients do not configure it).
+            Write-Warning @"
+          Secret GOOGLE_CLIENT_SECRET_JSON missing — Google Drive will be unavailable in this build.
+          Add the full OAuth client JSON as that repository secret, then re-tag to embed it.
           "@
-            exit 1
+            exit 0
           }
           # utf8NoBOM avoids a BOM that breaks google-auth JSON parsing
           $utf8 = New-Object System.Text.UTF8Encoding $false
@@ -96,9 +95,10 @@ jobs:
       - name: Build executable with PyInstaller
         working-directory: backend
         run: |
-          if (!(Test-Path "google_client_secret.json")) {
-            Write-Error "google_client_secret.json missing before PyInstaller"
-            exit 1
+          if (Test-Path "google_client_secret.json") {
+            Write-Host "Bundling google_client_secret.json into ObraGest.exe"
+          } else {
+            Write-Warning "google_client_secret.json absent — exe will ship without embedded Google OAuth"
           }
           pyinstaller launcher.spec --clean --noconfirm
           mv dist/ObraGest.exe "dist/ObraGest_${{ github.ref_name }}.exe"
