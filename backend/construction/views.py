@@ -369,11 +369,12 @@ class GoogleDriveStatusView(APIView):
 class GoogleDriveAuthView(APIView):
     def get(self, request):
         if not google_drive.is_configured():
+            path = google_drive.get_status()["credentials_path"]
             return Response(
                 {
                     "error": (
                         "Credenciais do Google não configuradas. "
-                        "Coloque o arquivo JSON em data/google_client_secret.json."
+                        f"Coloque o arquivo JSON em {path}."
                     )
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,

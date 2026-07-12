@@ -124,11 +124,20 @@ export default function SettingsPage() {
         {isLoading && <p className="text-sm text-brand-gray-muted">Carregando...</p>}
 
         {!isLoading && driveStatus && !driveStatus.configured && (
-          <p className="text-sm text-amber-600">
-            Credenciais do Google não encontradas. Coloque o arquivo JSON do
-            Google Cloud em <code>data/google_client_secret.json</code> e reinicie
-            o backend.
-          </p>
+          <div className="space-y-2 text-sm text-amber-700">
+            <p>
+              Credenciais do Google não encontradas. Coloque o arquivo JSON do
+              Google Cloud neste caminho e reinicie o ObraGest:
+            </p>
+            <code className="block break-all rounded bg-amber-50 px-3 py-2 text-amber-900">
+              {driveStatus.credentials_path}
+            </code>
+            <p className="text-brand-gray-muted">
+              No Google Cloud Console, a URI de redirecionamento deve ser{" "}
+              <code className="text-xs">http://obragest.com.br/google/callback/</code>{" "}
+              (ou a URL do ambiente local, se estiver em desenvolvimento).
+            </p>
+          </div>
         )}
 
         {!isLoading && driveStatus?.configured && !driveStatus.connected && (
