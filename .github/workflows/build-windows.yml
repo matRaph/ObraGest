@@ -76,6 +76,67 @@ jobs:
           pyinstaller launcher.spec --clean --noconfirm
           mv dist/ObraGest.exe "dist/ObraGest_${{ github.ref_name }}.exe"
 
+      - name: Sign executable (Authenticode)
+        working-directory: backend
+        env:
+          WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $exe = "dist/ObraGest_${{ github.ref_name }}.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "Executable not found: $exe"
+            exit 1
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PASSWORD)) {
+            Write-Error @"
+          Code signing secrets missing.
+          Add repository secrets:
+            - WINDOWS_CERT_BASE64  (PFX encoded as base64)
+            - WINDOWS_CERT_PASSWORD (PFX password)
+          See README.md section 'Release Windows / Code signing'.
+          "@
+            exit 1
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP "obragest-codesign.pfx"
+          try {
+            $bytes = [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64)
+            [IO.File]::WriteAllBytes($pfxPath, $bytes)
+
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
+              -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+              Sort-Object { $_.Directory.Name } -Descending |
+              Select-Object -First 1 -ExpandProperty FullName
+
+            if (-not $signtool) {
+              Write-Error "signtool.exe not found. Windows SDK missing on runner."
+              exit 1
+            }
+
+            Write-Host "Using signtool: $signtool"
+            & $signtool sign `
+              /f $pfxPath `
+              /p $env:WINDOWS_CERT_PASSWORD `
+              /fd SHA256 `
+              /tr http://timestamp.digicert.com `
+              /td SHA256 `
+              /v `
+              $exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            & $signtool verify /pa /v $exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            Write-Host "Signed successfully: $exe"
+          }
+          finally {
+            if (Test-Path $pfxPath) { Remove-Item $pfxPath -Force }
+          }
+
       - name: Create release and upload ObraGest.exe
         uses: softprops/action-gh-release@v2
         with:
@@ -87,6 +148,8 @@ jobs:
             1. Download `ObraGest_${{ github.ref_name }}.exe` below
             2. Right-click → **Run as administrator**
             3. Wait for the setup window and open **http://obragest.com.br**
+
+            The executable is Authenticode-signed. If Windows still warns on first run, choose **More info → Run anyway**.
 
             > Data is stored in `C:\Users\<your_user>\ObraGest\data\`
           files: backend/dist/ObraGest_${{ github.ref_name }}.exe

@@ -109,3 +109,45 @@ O sistema faz backup automático a cada 30 minutos (quando há alterações no b
 | `GOOGLE_DRIVE_BACKUP_INTERVAL_MINUTES` | Intervalo do backup automático | `30` |
 | `GOOGLE_DRIVE_MAX_BACKUPS` | Máximo de backups no Drive | `20` |
 | `FRONTEND_URL` | URL do frontend (redirect pós-login) | `http://localhost:3000` |
+
+## Release Windows / Code signing
+
+O `.exe` é gerado pelo workflow `.github/workflows/build-windows.yml` ao publicar uma tag `v*.*.*`.
+
+Para o Windows não bloquear o app (SmartScreen / Controle de aplicativos), o executável precisa de um **certificado Authenticode** (OV ou EV). Certificado autoassinado **não** resolve o bloqueio.
+
+### 1. Obter o certificado
+
+Compre um certificado de code signing (ex.: Sectigo, DigiCert, SSL.com) em formato **PFX/PKCS#12** (`.pfx`) com senha.
+
+### 2. Configurar secrets no GitHub
+
+No repositório: **Settings → Secrets and variables → Actions**:
+
+| Secret | Conteúdo |
+|--------|----------|
+| `WINDOWS_CERT_BASE64` | Arquivo `.pfx` em Base64 (uma linha) |
+| `WINDOWS_CERT_PASSWORD` | Senha do PFX |
+
+Gerar o Base64:
+
+```powershell
+# Windows PowerShell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\caminho\certificado.pfx")) | Set-Clipboard
+```
+
+```bash
+# Linux / macOS
+base64 -w 0 certificado.pfx | pbcopy   # ou: xclip / wl-copy
+```
+
+Sem esses secrets, o job de release **falha** de propósito (não publica `.exe` sem assinatura).
+
+### 3. Publicar
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+O Actions assina com `signtool` (SHA256 + timestamp DigiCert) e anexa o `.exe` ao release.
