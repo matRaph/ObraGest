@@ -58,9 +58,9 @@ python manage.py collectstatic --noinput
 if errorlevel 1 goto :error
 
 echo.
-echo [5/5] Compilando executavel com PyInstaller...
+echo [5/5] Compilando executavel com PyInstaller (onedir)...
 if not exist "google_client_secret.json" (
-    echo [AVISO] google_client_secret.json ausente — o .exe nao tera Google Drive embutido.
+    echo [AVISO] google_client_secret.json ausente — o build nao tera Google Drive embutido.
     echo         Para builds de distribuicao, copie o JSON OAuth para backend\google_client_secret.json
 )
 pyinstaller launcher.spec --clean --noconfirm
@@ -70,11 +70,10 @@ echo.
 echo ========================================
 echo   Build concluido com sucesso!
 echo.
-echo   Executavel: backend\dist\ObraGest.exe
-echo   Tamanho estimado: 200-400 MB
+echo   Pasta: backend\dist\ObraGest\
+echo   Execute: backend\dist\ObraGest\ObraGest.exe
 echo.
-echo   Para distribuir: envie apenas o arquivo
-echo   ObraGest.exe para o cliente.
+echo   Para distribuir: zip a pasta ObraGest inteira.
 echo ========================================
 cd ..
 pause

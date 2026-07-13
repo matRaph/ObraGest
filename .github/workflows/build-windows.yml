@@ -94,14 +94,22 @@ jobs:
 
       - name: Build executable with PyInstaller
         working-directory: backend
+        shell: pwsh
         run: |
           if (Test-Path "google_client_secret.json") {
-            Write-Host "Bundling google_client_secret.json into ObraGest.exe"
+            Write-Host "Bundling google_client_secret.json into ObraGest"
           } else {
-            Write-Warning "google_client_secret.json absent — exe will ship without embedded Google OAuth"
+            Write-Warning "google_client_secret.json absent — build will ship without embedded Google OAuth"
           }
           pyinstaller launcher.spec --clean --noconfirm
-          mv dist/ObraGest.exe "dist/ObraGest_${{ github.ref_name }}.exe"
+          if (!(Test-Path "dist/ObraGest/ObraGest.exe")) {
+            Write-Error "dist/ObraGest/ObraGest.exe not found"
+            exit 1
+          }
+          $zipName = "ObraGest_${{ github.ref_name }}.zip"
+          if (Test-Path "dist/$zipName") { Remove-Item "dist/$zipName" -Force }
+          Compress-Archive -Path "dist/ObraGest" -DestinationPath "dist/$zipName" -Force
+          Write-Host "Created dist/$zipName"
 
       - name: Sign executable (Authenticode)
         working-directory: backend
@@ -110,7 +118,7 @@ jobs:
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         shell: pwsh
         run: |
-          $exe = "dist/ObraGest_${{ github.ref_name }}.exe"
+          $exe = "dist/ObraGest/ObraGest.exe"
           if (-not (Test-Path $exe)) {
             Write-Error "Executable not found: $exe"
             exit 1
@@ -119,11 +127,11 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_BASE64) -or
               [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PASSWORD)) {
             Write-Warning @"
-          Code signing secrets missing — publishing UNSIGNED exe.
+          Code signing secrets missing — publishing UNSIGNED build.
           Windows SmartScreen may block it. To sign, add:
             - WINDOWS_CERT_BASE64
             - WINDOWS_CERT_PASSWORD
-          See README.md section 'Release Windows / Code signing'.
+          See README.md section 'Release Windows'.
           "@
             exit 0
           }
@@ -159,12 +167,16 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
             Write-Host "Signed successfully: $exe"
+
+            $zipName = "ObraGest_${{ github.ref_name }}.zip"
+            Remove-Item "dist/$zipName" -Force -ErrorAction SilentlyContinue
+            Compress-Archive -Path "dist/ObraGest" -DestinationPath "dist/$zipName" -Force
           }
           finally {
             if (Test-Path $pfxPath) { Remove-Item $pfxPath -Force }
           }
 
-      - name: Create release and upload ObraGest.exe
+      - name: Create release and upload ObraGest
         uses: softprops/action-gh-release@v2
         with:
           name: "ObraGest ${{ github.ref_name }}"
@@ -172,14 +184,15 @@ jobs:
             ## ObraGest ${{ github.ref_name }}
 
             ### Installation
-            1. Download `ObraGest_${{ github.ref_name }}.exe` below
-            2. Right-click → **Run as administrator**
-            3. Wait for the setup window and open **http://obragest.com.br**
+            1. Download `ObraGest_${{ github.ref_name }}.zip`
+            2. Extract the folder
+            3. Run `ObraGest.exe` (accept UAC if prompted)
+            4. If hosts cannot be written, the app opens **http://localhost:8080** automatically
 
             If Windows blocks the app (SmartScreen), choose **More info → Run anyway**.
-            In **Configurações**, click **Conectar Google Drive** and authorize your account (one-time).
+            In **Configurações**, click **Conectar Google Drive** once to authorize.
 
             > Data is stored in `C:\Users\<your_user>\ObraGest\data\`
-          files: backend/dist/ObraGest_${{ github.ref_name }}.exe
+          files: backend/dist/ObraGest_${{ github.ref_name }}.zip
           draft: false
           prerelease: false

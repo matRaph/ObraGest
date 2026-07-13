@@ -1,33 +1,37 @@
 """
 Launcher do ObraGest para Windows.
-Requer execução como Administrador (solicitado automaticamente via UAC).
 
-O executável gerado pelo PyInstaller:
-  1. Solicita elevação de administrador (UAC) se necessário
-  2. Adiciona 'obragest.com.br' ao arquivo hosts do Windows
-  3. Aplica migrações do banco de dados
-  4. Inicia o servidor web com waitress
-  5. Abre o navegador em http://obragest.com.br
-  6. Exibe um ícone na bandeja do sistema para encerrar
+Fluxo:
+  1. Solicita elevação UAC (melhor chance de gravar o hosts / porta 80)
+  2. Tenta mapear obragest.com.br → 127.0.0.1 no hosts
+  3. Se o hosts falhar, usa http://localhost:8080 (nunca abre o site público)
+  4. Migra o banco, sobe o waitress e abre o navegador
+  5. Ícone na bandeja para encerrar
 """
 
-import os
-import sys
+from __future__ import annotations
+
 import ctypes
+import os
+import socket
+import sys
 import threading
-import webbrowser
 import time
+import urllib.request
+import webbrowser
 from pathlib import Path
 
 
 APP_NAME = "ObraGest"
-APP_URL = "http://obragest.com.br"
-HOSTS_ENTRY = "127.0.0.1 obragest.com.br"
+HOSTS_DOMAIN = "obragest.com.br"
+HOSTS_ENTRY = f"127.0.0.1 {HOSTS_DOMAIN}"
 HOSTS_FILE = r"C:\Windows\System32\drivers\etc\hosts"
+
+# Definidos em resolve_runtime_mode()
+APP_URL = f"http://{HOSTS_DOMAIN}"
 SERVER_PORT = 80
+USING_HOSTS = False
 
-
-# ── Utilitários de sistema ────────────────────────────────────────────────────
 
 def is_admin() -> bool:
     try:
@@ -37,32 +41,96 @@ def is_admin() -> bool:
 
 
 def request_admin_elevation() -> None:
-    """Re-lança o processo com elevação UAC e encerra o atual."""
+    """Re-lança com UAC. Se o usuário recusar, segue sem admin (modo localhost)."""
     script = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__)
-    ctypes.windll.shell32.ShellExecuteW(None, "runas", script, "", None, 1)
-    sys.exit(0)
+    rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", script, "", None, 1)
+    # rc > 32 = sucesso ao lançar o processo elevado
+    if rc > 32:
+        sys.exit(0)
+    print("[UAC] Elevação recusada — continuando em modo localhost (sem hosts).")
 
 
-# ── Configuração do hosts ─────────────────────────────────────────────────────
+def _port_free(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
 
-def configure_hosts() -> None:
-    """Adiciona a entrada obragest.com.br ao hosts se ainda não existir."""
+
+def configure_hosts() -> bool:
+    """Adiciona obragest.com.br → 127.0.0.1. Retorna True se o domínio aponta para local."""
     try:
-        text = Path(HOSTS_FILE).read_text(encoding="utf-8")
-        if "obragest.com.br" not in text:
+        path = Path(HOSTS_FILE)
+        # Remove atributo somente-leitura se existir
+        try:
+            import stat
+
+            if path.exists() and not os.access(path, os.W_OK):
+                path.chmod(stat.S_IWRITE | stat.S_IREAD)
+        except Exception:
+            pass
+
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if HOSTS_DOMAIN not in text:
             with open(HOSTS_FILE, "a", encoding="utf-8") as f:
                 f.write(f"\n{HOSTS_ENTRY}\n")
-            print("[hosts] Entrada 'obragest.com.br' adicionada.")
+            print(f"[hosts] Entrada '{HOSTS_DOMAIN}' adicionada.")
         else:
-            print("[hosts] Entrada 'obragest.com.br' já configurada.")
+            # Garante linha 127.0.0.1 (evita entrada antiga apontando para outro IP)
+            lines = text.splitlines()
+            updated = []
+            changed = False
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith("#") or HOSTS_DOMAIN not in stripped:
+                    updated.append(line)
+                    continue
+                if stripped.startswith("127.0.0.1") and HOSTS_DOMAIN in stripped:
+                    updated.append(line)
+                else:
+                    updated.append(HOSTS_ENTRY)
+                    changed = True
+            if changed:
+                path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+                print(f"[hosts] Entrada '{HOSTS_DOMAIN}' corrigida para 127.0.0.1.")
+            else:
+                print(f"[hosts] Entrada '{HOSTS_DOMAIN}' já configurada.")
+        return True
     except Exception as e:
         print(f"[hosts] Aviso: não foi possível configurar — {e}")
+        return False
 
 
-# ── Configuração do ambiente Django ──────────────────────────────────────────
+def resolve_runtime_mode(hosts_ok: bool) -> None:
+    """Define URL/porta: hosts+80 se possível; senão localhost:8080."""
+    global APP_URL, SERVER_PORT, USING_HOSTS
+
+    if hosts_ok and is_admin() and _port_free(80):
+        USING_HOSTS = True
+        SERVER_PORT = 80
+        APP_URL = f"http://{HOSTS_DOMAIN}"
+        print(f"[modo] Produção local — {APP_URL}")
+        return
+
+    USING_HOSTS = False
+    SERVER_PORT = 8080
+    APP_URL = "http://localhost:8080"
+    if not hosts_ok:
+        print(
+            "[modo] Fallback — hosts indisponível. "
+            "Abrindo localhost (evita o site público na internet)."
+        )
+    elif not is_admin():
+        print("[modo] Fallback — sem administrador; usando porta 8080.")
+    else:
+        print("[modo] Fallback — porta 80 ocupada; usando 8080.")
+    print(f"[modo] Acesse: {APP_URL}")
+
 
 def get_bundle_dir() -> Path:
-    """Retorna o diretório base, seja em desenvolvimento ou no bundle PyInstaller."""
     if getattr(sys, "frozen", False):
         return Path(sys._MEIPASS)
     return Path(__file__).resolve().parent
@@ -76,16 +144,24 @@ def configure_environment() -> None:
     os.environ["DJANGO_SETTINGS_MODULE"] = "obragest.settings"
     os.environ["OBRA_GEST_DATA_DIR"] = str(data_dir)
     os.environ["DEBUG"] = "false"
-    os.environ["ALLOWED_HOSTS"] = "obragest.com.br,localhost,127.0.0.1"
-    os.environ["CORS_ALLOWED_ORIGINS"] = "http://obragest.com.br"
-    os.environ["FRONTEND_URL"] = "http://obragest.com.br"
-    os.environ["GOOGLE_DRIVE_REDIRECT_URI"] = "http://obragest.com.br/google/callback/"
     os.environ["OBRAGEST_LAUNCHER"] = "1"
     os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
     if "SECRET_KEY" not in os.environ:
         os.environ["SECRET_KEY"] = "obragest-local-key-troque-em-producao-xYz9@2!"
 
-    # Credenciais OAuth embutidas no bundle (cliente não precisa configurar)
+    if USING_HOSTS:
+        origin = f"http://{HOSTS_DOMAIN}"
+        os.environ["ALLOWED_HOSTS"] = f"{HOSTS_DOMAIN},localhost,127.0.0.1"
+        os.environ["CORS_ALLOWED_ORIGINS"] = origin
+        os.environ["FRONTEND_URL"] = origin
+        os.environ["GOOGLE_DRIVE_REDIRECT_URI"] = f"{origin}/google/callback/"
+    else:
+        origin = "http://localhost:8080"
+        os.environ["ALLOWED_HOSTS"] = "localhost,127.0.0.1"
+        os.environ["CORS_ALLOWED_ORIGINS"] = origin
+        os.environ["FRONTEND_URL"] = origin
+        os.environ["GOOGLE_DRIVE_REDIRECT_URI"] = f"{origin}/google/callback/"
+
     bundled_secrets = base_dir / "google_client_secret.json"
     if bundled_secrets.is_file():
         os.environ["GOOGLE_OAUTH_CLIENT_SECRETS"] = str(bundled_secrets)
@@ -95,6 +171,7 @@ def configure_environment() -> None:
 
 def run_django_setup() -> None:
     import django
+
     django.setup()
 
     from django.conf import settings
@@ -104,7 +181,7 @@ def run_django_setup() -> None:
     if not frontend_dist.exists() or not (frontend_dist / "index.html").is_file():
         print(
             f"[AVISO] Frontend não encontrado em {frontend_dist}. "
-            "Recompile com build.bat (npm run build)."
+            "Recompile o build."
         )
     else:
         print(f"Frontend OK: {frontend_dist}")
@@ -124,24 +201,41 @@ def run_django_setup() -> None:
     print("Banco de dados pronto.")
 
 
-# ── Servidor web ──────────────────────────────────────────────────────────────
-
 def start_server() -> None:
     from waitress import serve
     from obragest.wsgi import application
+
     print(f"Servidor iniciado — porta {SERVER_PORT}.")
     serve(application, host="127.0.0.1", port=SERVER_PORT, threads=4)
 
 
-# ── Ícone na bandeja do sistema ───────────────────────────────────────────────
+def wait_until_ready(timeout: float = 60.0) -> bool:
+    """Espera o /api/health/ em vez de sleep fixo (abre o browser quando pronto)."""
+    url = f"http://127.0.0.1:{SERVER_PORT}/api/health/"
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=1) as resp:
+                if 200 <= resp.status < 300:
+                    return True
+        except Exception:
+            pass
+        time.sleep(0.25)
+    return False
+
 
 def create_tray_icon():
     from PIL import Image, ImageDraw
+
     img = Image.new("RGB", (64, 64), color="#1e40af")
     draw = ImageDraw.Draw(img)
     draw.ellipse([8, 8, 56, 56], outline="white", width=6)
     draw.ellipse([20, 20, 44, 44], fill="white")
     return img
+
+
+def open_app() -> None:
+    webbrowser.open(APP_URL)
 
 
 def run_with_tray() -> None:
@@ -150,12 +244,16 @@ def run_with_tray() -> None:
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
 
-    print("Abrindo navegador...")
-    time.sleep(2)
-    webbrowser.open(APP_URL)
+    print("Aguardando servidor...")
+    if wait_until_ready():
+        print("Abrindo navegador...")
+        open_app()
+    else:
+        print("[AVISO] Servidor demorou para responder; abrindo navegador mesmo assim.")
+        open_app()
 
     def on_open(icon, item):
-        webbrowser.open(APP_URL)
+        open_app()
 
     def on_quit(icon, item):
         icon.stop()
@@ -177,7 +275,6 @@ def run_with_tray() -> None:
 
 
 def run_console_fallback() -> None:
-    """Fallback caso pystray não esteja disponível."""
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
 
@@ -187,8 +284,8 @@ def run_console_fallback() -> None:
     print("  Feche esta janela para encerrar o sistema.")
     print("=" * 50 + "\n")
 
-    time.sleep(2)
-    webbrowser.open(APP_URL)
+    wait_until_ready()
+    open_app()
 
     try:
         while True:
@@ -197,15 +294,15 @@ def run_console_fallback() -> None:
         pass
 
 
-# ── Ponto de entrada ──────────────────────────────────────────────────────────
-
 def main() -> None:
+    # Tenta admin (hosts / porta 80). Se recusar UAC, continua em localhost:8080.
     if not is_admin():
         request_admin_elevation()
-        return
+        # Se chegou aqui, UAC foi recusado — segue sem elevação
 
     print(f"=== {APP_NAME} ===")
-    configure_hosts()
+    hosts_ok = configure_hosts()
+    resolve_runtime_mode(hosts_ok)
     configure_environment()
     run_django_setup()
 

@@ -160,7 +160,7 @@ Gerar Base64 do PFX:
 base64 -w 0 certificado.pfx | pbcopy
 ```
 
-Sem `WINDOWS_CERT_*`, o release publica o `.exe` sem assinatura.
+Sem `WINDOWS_CERT_*`, o release publica o build sem assinatura.
 
 ### Publicar
 
@@ -168,3 +168,9 @@ Sem `WINDOWS_CERT_*`, o release publica o `.exe` sem assinatura.
 git tag v1.0.1
 git push origin v1.0.1
 ```
+
+O release sobe um **ZIP** (`ObraGest_vX.Y.Z.zip`): extraia a pasta e rode `ObraGest.exe`.
+O formato **onedir** inicia bem mais rápido que o `.exe` único antigo.
+
+Se o Windows não deixar gravar o `hosts`, o app abre automaticamente **http://localhost:8080**
+(em vez de ir para o site público `obragest.com.br` na internet).
