@@ -169,8 +169,7 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-O release sobe um **ZIP** (`ObraGest_vX.Y.Z.zip`): extraia a pasta e rode `ObraGest.exe`.
-O formato **onedir** inicia bem mais rápido que o `.exe` único antigo.
+O release publica um único **`ObraGest_vX.Y.Z.exe`**: baixe e execute diretamente.
 
 Se o Windows não deixar gravar o `hosts`, o app abre automaticamente **http://localhost:8080**
 (em vez de ir para o site público `obragest.com.br` na internet).
