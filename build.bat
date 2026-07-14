@@ -58,7 +58,7 @@ python manage.py collectstatic --noinput
 if errorlevel 1 goto :error
 
 echo.
-echo [5/5] Compilando executavel com PyInstaller (onedir)...
+echo [5/5] Compilando executavel com PyInstaller...
 if not exist "google_client_secret.json" (
     echo [AVISO] google_client_secret.json ausente — o build nao tera Google Drive embutido.
     echo         Para builds de distribuicao, copie o JSON OAuth para backend\google_client_secret.json
@@ -70,10 +70,7 @@ echo.
 echo ========================================
 echo   Build concluido com sucesso!
 echo.
-echo   Pasta: backend\dist\ObraGest\
-echo   Execute: backend\dist\ObraGest\ObraGest.exe
-echo.
-echo   Para distribuir: zip a pasta ObraGest inteira.
+echo   Executavel: backend\dist\ObraGest.exe
 echo ========================================
 cd ..
 pause

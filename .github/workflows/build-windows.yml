@@ -97,19 +97,17 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path "google_client_secret.json") {
-            Write-Host "Bundling google_client_secret.json into ObraGest"
+            Write-Host "Bundling google_client_secret.json into ObraGest.exe"
           } else {
             Write-Warning "google_client_secret.json absent — build will ship without embedded Google OAuth"
           }
           pyinstaller launcher.spec --clean --noconfirm
-          if (!(Test-Path "dist/ObraGest/ObraGest.exe")) {
-            Write-Error "dist/ObraGest/ObraGest.exe not found"
+          if (!(Test-Path "dist/ObraGest.exe")) {
+            Write-Error "dist/ObraGest.exe not found"
             exit 1
           }
-          $zipName = "ObraGest_${{ github.ref_name }}.zip"
-          if (Test-Path "dist/$zipName") { Remove-Item "dist/$zipName" -Force }
-          Compress-Archive -Path "dist/ObraGest" -DestinationPath "dist/$zipName" -Force
-          Write-Host "Created dist/$zipName"
+          Move-Item -Force "dist/ObraGest.exe" "dist/ObraGest_${{ github.ref_name }}.exe"
+          Write-Host "Created dist/ObraGest_${{ github.ref_name }}.exe"
 
       - name: Sign executable (Authenticode)
         working-directory: backend
@@ -118,7 +116,7 @@ jobs:
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         shell: pwsh
         run: |
-          $exe = "dist/ObraGest/ObraGest.exe"
+          $exe = "dist/ObraGest_${{ github.ref_name }}.exe"
           if (-not (Test-Path $exe)) {
             Write-Error "Executable not found: $exe"
             exit 1
@@ -167,16 +165,12 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
             Write-Host "Signed successfully: $exe"
-
-            $zipName = "ObraGest_${{ github.ref_name }}.zip"
-            Remove-Item "dist/$zipName" -Force -ErrorAction SilentlyContinue
-            Compress-Archive -Path "dist/ObraGest" -DestinationPath "dist/$zipName" -Force
           }
           finally {
             if (Test-Path $pfxPath) { Remove-Item $pfxPath -Force }
           }
 
-      - name: Create release and upload ObraGest
+      - name: Create release and upload ObraGest.exe
         uses: softprops/action-gh-release@v2
         with:
           name: "ObraGest ${{ github.ref_name }}"
@@ -184,15 +178,14 @@ jobs:
             ## ObraGest ${{ github.ref_name }}
 
             ### Installation
-            1. Download `ObraGest_${{ github.ref_name }}.zip`
-            2. Extract the folder
-            3. Run `ObraGest.exe` (accept UAC if prompted)
-            4. If hosts cannot be written, the app opens **http://localhost:8080** automatically
+            1. Download `ObraGest_${{ github.ref_name }}.exe` below
+            2. Run the executable (accept UAC if prompted)
+            3. If hosts cannot be written, the app opens **http://localhost:8080** automatically
 
             If Windows blocks the app (SmartScreen), choose **More info → Run anyway**.
             In **Configurações**, click **Conectar Google Drive** once to authorize.
 
             > Data is stored in `C:\Users\<your_user>\ObraGest\data\`
-          files: backend/dist/ObraGest_${{ github.ref_name }}.zip
+          files: backend/dist/ObraGest_${{ github.ref_name }}.exe
           draft: false
           prerelease: false
