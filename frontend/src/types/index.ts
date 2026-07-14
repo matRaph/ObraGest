@@ -14,6 +14,7 @@ export interface Obra {
   total_despesas_pendentes: string;
   total_investimentos: string;
   saldo: string;
+  data_primeira_operacao: string | null;
 }
 
 export interface Subcategoria {
@@ -35,6 +36,12 @@ export interface Categoria {
   subcategorias: Subcategoria[];
 }
 
+export interface Fornecedor {
+  id: string;
+  nome: string;
+  ativa: boolean;
+}
+
 export interface Operacao {
   id: string;
   obra: string;
@@ -42,7 +49,10 @@ export interface Operacao {
   categoria_nome: string;
   subcategoria: string | null;
   subcategoria_nome: string | null;
+  fornecedor: string | null;
+  fornecedor_nome: string | null;
   valor: string;
+  quantidade: string | null;
   data: string;
   tipo: TipoOperacao;
   pago: boolean;

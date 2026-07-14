@@ -25,6 +25,11 @@ export default function CategoriasPage() {
   const [subInputs, setSubInputs] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<{ id: string; nome: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [secoesAbertas, setSecoesAbertas] = useState<Record<TipoOperacao, boolean>>({
+    despesa: false,
+    receita: false,
+    investimento: false,
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["categorias"],
@@ -224,7 +229,7 @@ export default function CategoriasPage() {
       <h2 className="mb-2 text-2xl font-semibold text-brand-gray">Categorias</h2>
       <p className="mb-6 text-sm text-brand-gray-muted">
         Gerencie suas categorias e subcategorias de operação. Excluir mantém as
-        operações já lançadas (exclusão suave).
+        operações já lançadas.
       </p>
 
       <form
@@ -282,21 +287,42 @@ export default function CategoriasPage() {
       {isLoading ? (
         <p className="text-brand-gray-muted">Carregando...</p>
       ) : (
-        <div className="space-y-8">
-          {grupos.map(({ tipo, itens }) => (
-            <section key={tipo}>
-              <h3 className={`mb-3 text-lg font-semibold ${tipoHeaderStyles[tipo]}`}>
-                {tipoPluralLabels[tipo]}
-              </h3>
-              {itens.length === 0 ? (
-                <p className="text-sm text-brand-gray-muted">Nenhuma categoria deste tipo.</p>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {itens.map(renderCategoriaCard)}
-                </div>
-              )}
-            </section>
-          ))}
+        <div className="space-y-4">
+          {grupos.map(({ tipo, itens }) => {
+            const aberta = secoesAbertas[tipo];
+            return (
+              <section key={tipo} className="rounded-lg border bg-white shadow-sm">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSecoesAbertas((prev) => ({ ...prev, [tipo]: !prev[tipo] }))
+                  }
+                  className="flex w-full items-center justify-between px-4 py-3 text-left"
+                >
+                  <h3 className={`text-lg font-semibold ${tipoHeaderStyles[tipo]}`}>
+                    {tipoPluralLabels[tipo]}
+                    <span className="ml-2 text-sm font-normal text-brand-gray-muted">
+                      ({itens.length})
+                    </span>
+                  </h3>
+                  <span className="text-brand-gray-muted">{aberta ? "▾" : "▸"}</span>
+                </button>
+                {aberta && (
+                  <div className="border-t px-4 pb-4 pt-3">
+                    {itens.length === 0 ? (
+                      <p className="text-sm text-brand-gray-muted">
+                        Nenhuma categoria deste tipo.
+                      </p>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {itens.map(renderCategoriaCard)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
     </div>

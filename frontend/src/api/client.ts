@@ -2,6 +2,7 @@ import axios from "axios";
 import type {
   Categoria,
   DashboardData,
+  Fornecedor,
   GoogleDriveStatus,
   Obra,
   Operacao,
@@ -49,6 +50,15 @@ export const categoriasApi = {
   update: (id: string, data: Partial<CategoriaInput>) =>
     api.patch<Categoria>(`/categorias/${id}/`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/categorias/${id}/`),
+};
+
+export const fornecedoresApi = {
+  list: () => api.get<PaginatedResponse<Fornecedor>>("/fornecedores/").then((r) => r.data),
+  create: (data: { nome: string }) =>
+    api.post<Fornecedor>("/fornecedores/", data).then((r) => r.data),
+  update: (id: string, data: Partial<{ nome: string }>) =>
+    api.patch<Fornecedor>(`/fornecedores/${id}/`, data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/fornecedores/${id}/`),
 };
 
 export const dashboardApi = {

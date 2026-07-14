@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import CategoriasPage from "./pages/CategoriasPage";
 import DashboardPage from "./pages/DashboardPage";
+import FornecedoresPage from "./pages/FornecedoresPage";
 import ObraDetailPage from "./pages/ObraDetailPage";
 import ObrasPage from "./pages/ObrasPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/obras/:id" element={<ObraDetailPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/categorias" element={<CategoriasPage />} />
+            <Route path="/fornecedores" element={<FornecedoresPage />} />
             <Route path="/configuracoes" element={<SettingsPage />} />
           </Routes>
         </Layout>

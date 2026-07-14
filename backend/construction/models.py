@@ -40,6 +40,26 @@ class Obra(models.Model):
         return self.nome
 
 
+class Fornecedor(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    nome = models.CharField(max_length=100)
+    ativa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+        verbose_name_plural = "fornecedores"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["nome"],
+                condition=Q(ativa=True),
+                name="unique_fornecedor_ativo",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.nome
+
+
 class Categoria(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     nome = models.CharField(max_length=100)
@@ -93,7 +113,17 @@ class Operacao(models.Model):
         null=True,
         blank=True,
     )
+    fornecedor = models.ForeignKey(
+        Fornecedor,
+        on_delete=models.PROTECT,
+        related_name="operacoes",
+        null=True,
+        blank=True,
+    )
     valor = models.DecimalField(max_digits=12, decimal_places=2)
+    quantidade = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True
+    )
     data = models.DateField()
     tipo = models.CharField(max_length=12, choices=TipoOperacao.choices)
     pago = models.BooleanField(default=True)

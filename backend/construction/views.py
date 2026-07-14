@@ -24,9 +24,10 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Categoria, Obra, Operacao, TipoOperacao
+from .models import Categoria, Fornecedor, Obra, Operacao, TipoOperacao
 from .serializers import (
     CategoriaSerializer,
+    FornecedorSerializer,
     ObraDetailSerializer,
     ObraListSerializer,
     OperacaoSerializer,
@@ -39,6 +40,17 @@ from .services.backup import (
     restore_backup_file,
 )
 from .services import google_drive
+
+
+class FornecedorViewSet(viewsets.ModelViewSet):
+    serializer_class = FornecedorSerializer
+
+    def get_queryset(self):
+        return Fornecedor.objects.filter(ativa=True).order_by("nome")
+
+    def perform_destroy(self, instance: Fornecedor):
+        instance.ativa = False
+        instance.save(update_fields=["ativa"])
 
 
 class CategoriaViewSet(viewsets.ModelViewSet):
@@ -128,7 +140,7 @@ class ObraViewSet(viewsets.ModelViewSet):
         obra = self.get_object()
 
         if request.method == "GET":
-            qs = obra.operacoes.select_related("categoria", "subcategoria")
+            qs = obra.operacoes.select_related("categoria", "subcategoria", "fornecedor")
             tipo = request.query_params.get("tipo")
             categoria = request.query_params.get("categoria")
             subcategoria = request.query_params.get("subcategoria")
@@ -166,7 +178,7 @@ class ObraViewSet(viewsets.ModelViewSet):
 
 
 class OperacaoViewSet(viewsets.ModelViewSet):
-    queryset = Operacao.objects.select_related("categoria", "obra")
+    queryset = Operacao.objects.select_related("categoria", "obra", "fornecedor")
     serializer_class = OperacaoSerializer
 
     def get_queryset(self):

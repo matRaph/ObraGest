@@ -8,7 +8,7 @@ from pathlib import Path
 from django.conf import settings
 from django.db import connection
 
-from construction.models import Categoria, Obra, Operacao
+from construction.models import Categoria, Fornecedor, Obra, Operacao
 
 
 def _db_path() -> Path:

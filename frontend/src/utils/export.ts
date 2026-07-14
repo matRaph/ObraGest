@@ -68,7 +68,7 @@ export function exportarObra(obra: Obra, operacoes: Operacao[]): void {
 
   // Tabela de operações
   rows.push(["OPERAÇÕES"]);
-  rows.push(["Data", "Tipo", "Categoria", "Subcategoria", "Descrição", "Situação", "Valor (R$)"]);
+  rows.push(["Data", "Tipo", "Categoria", "Subcategoria", "Fornecedor", "Descrição", "Situação", "Qtd.", "Valor (R$)"]);
 
   for (const op of operacoes) {
     rows.push([
@@ -76,8 +76,10 @@ export function exportarObra(obra: Obra, operacoes: Operacao[]): void {
       tipoLabels[op.tipo] ?? op.tipo,
       op.categoria_nome,
       op.subcategoria_nome ?? "",
+      op.fornecedor_nome ?? "",
       op.descricao ?? "",
       op.tipo === "despesa" ? (op.pago ? "Paga" : "Não paga") : "",
+      op.quantidade ?? "",
       formatValorCsv(op.valor),
     ]);
   }
