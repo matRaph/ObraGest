@@ -3,7 +3,25 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from .constants import DESCRICAO_MAX_LENGTH, NOME_MAX_LENGTH
-from .models import Categoria, Obra, Operacao, TipoOperacao
+from .models import Categoria, Fornecedor, Obra, Operacao, TipoOperacao
+
+
+class FornecedorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Fornecedor
+        fields = ["id", "nome", "ativa"]
+        validators = []
+
+    def validate(self, attrs):
+        nome = attrs.get("nome", getattr(self.instance, "nome", None))
+        duplicados = Fornecedor.objects.filter(nome=nome, ativa=True)
+        if self.instance is not None:
+            duplicados = duplicados.exclude(pk=self.instance.pk)
+        if duplicados.exists():
+            raise serializers.ValidationError(
+                {"nome": "Já existe um fornecedor ativo com esse nome."}
+            )
+        return attrs
 
 
 class SubcategoriaSerializer(serializers.ModelSerializer):
@@ -92,6 +110,7 @@ class _ObraTotaisMixin(serializers.ModelSerializer):
     total_despesas_pendentes = serializers.SerializerMethodField()
     total_investimentos = serializers.SerializerMethodField()
     saldo = serializers.SerializerMethodField()
+    data_primeira_operacao = serializers.SerializerMethodField()
 
     def _cached_totais(self, obj: Obra) -> dict:
         cache = getattr(obj, "_totais_cache", None)
@@ -115,6 +134,14 @@ class _ObraTotaisMixin(serializers.ModelSerializer):
     def get_saldo(self, obj: Obra) -> Decimal:
         return self._cached_totais(obj)["saldo"]
 
+    def get_data_primeira_operacao(self, obj: Obra):
+        primeira = (
+            obj.operacoes.order_by("data", "criado_em")
+            .values_list("data", flat=True)
+            .first()
+        )
+        return primeira
+
 
 class ObraListSerializer(_ObraTotaisMixin):
     nome = serializers.CharField(max_length=NOME_MAX_LENGTH)
@@ -137,6 +164,7 @@ class ObraListSerializer(_ObraTotaisMixin):
             "total_despesas_pendentes",
             "total_investimentos",
             "saldo",
+            "data_primeira_operacao",
         ]
 
 
@@ -161,6 +189,7 @@ class ObraDetailSerializer(_ObraTotaisMixin):
             "total_despesas_pendentes",
             "total_investimentos",
             "saldo",
+            "data_primeira_operacao",
         ]
 
 
@@ -168,6 +197,9 @@ class OperacaoSerializer(serializers.ModelSerializer):
     categoria_nome = serializers.CharField(source="categoria.nome", read_only=True)
     subcategoria_nome = serializers.CharField(
         source="subcategoria.nome", read_only=True, default=None
+    )
+    fornecedor_nome = serializers.CharField(
+        source="fornecedor.nome", read_only=True, default=None
     )
     descricao = serializers.CharField(
         max_length=DESCRICAO_MAX_LENGTH, required=False, allow_blank=True
@@ -182,7 +214,10 @@ class OperacaoSerializer(serializers.ModelSerializer):
             "categoria_nome",
             "subcategoria",
             "subcategoria_nome",
+            "fornecedor",
+            "fornecedor_nome",
             "valor",
+            "quantidade",
             "data",
             "tipo",
             "pago",
@@ -199,6 +234,11 @@ class OperacaoSerializer(serializers.ModelSerializer):
                 "Selecione uma categoria principal, não uma subcategoria."
             )
         return categoria
+
+    def validate_fornecedor(self, fornecedor: Fornecedor | None) -> Fornecedor | None:
+        if fornecedor is not None and not fornecedor.ativa:
+            raise serializers.ValidationError("Fornecedor inativo.")
+        return fornecedor
 
     def validate(self, attrs):
         categoria = attrs.get("categoria", getattr(self.instance, "categoria", None))

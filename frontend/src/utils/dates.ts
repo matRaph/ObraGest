@@ -18,10 +18,15 @@ export function getCurrentMonthRange() {
 
 export function getObraDashboardRange(obra: {
   data_inicio: string | null;
+  data_primeira_operacao: string | null;
   criado_em: string;
 }) {
+  const inicio =
+    obra.data_primeira_operacao ??
+    obra.data_inicio ??
+    obra.criado_em.slice(0, 10);
   return {
-    inicio: obra.data_inicio ?? obra.criado_em.slice(0, 10),
+    inicio,
     fim: getTodayIso(),
   };
 }

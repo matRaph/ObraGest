@@ -6,6 +6,7 @@ from .views import (
     BackupView,
     CategoriaViewSet,
     DashboardView,
+    FornecedorViewSet,
     GoogleDriveAuthView,
     GoogleDriveDisconnectView,
     GoogleDriveRestoreView,
@@ -21,6 +22,7 @@ router = DefaultRouter()
 router.register("obras", ObraViewSet, basename="obra")
 router.register("operacoes", OperacaoViewSet, basename="operacao")
 router.register("categorias", CategoriaViewSet, basename="categoria")
+router.register("fornecedores", FornecedorViewSet, basename="fornecedor")
 
 urlpatterns = [
     path("", include(router.urls)),

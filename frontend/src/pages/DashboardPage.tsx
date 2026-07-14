@@ -33,12 +33,25 @@ import type { TipoOperacao } from "../types";
 
 const defaultRange = getCurrentMonthRange();
 
+type PeriodoPreset = "desde_inicio" | "mes_atual" | "custom";
+
+function presetButtonClass(active: boolean) {
+  return active
+    ? "rounded border border-brand-blue bg-brand-blue px-3 py-2 text-sm text-white"
+    : "rounded border px-3 py-2 text-sm text-brand-gray hover:bg-brand-gray-light";
+}
+
 export default function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const obraParam = searchParams.get("obra") ?? "";
 
-  const [dataInicio, setDataInicio] = useState(defaultRange.inicio);
-  const [dataFim, setDataFim] = useState(defaultRange.fim);
+  const [dataInicio, setDataInicio] = useState(
+    obraParam ? "" : defaultRange.inicio
+  );
+  const [dataFim, setDataFim] = useState(obraParam ? "" : defaultRange.fim);
+  const [periodoPreset, setPeriodoPreset] = useState<PeriodoPreset>(
+    obraParam ? "desde_inicio" : "mes_atual"
+  );
   const [tipoGrafico, setTipoGrafico] = useState<TipoOperacao>("despesa");
 
   const params: Record<string, string> = {
@@ -47,11 +60,6 @@ export default function DashboardPage() {
   };
   if (obraParam) params.obra = obraParam;
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["dashboard", params],
-    queryFn: () => dashboardApi.get(params),
-  });
-
   const { data: obrasData } = useQuery({
     queryKey: ["obras", { ordering: "nome" }],
     queryFn: () => obrasApi.list({ ordering: "nome" }),
@@ -59,15 +67,23 @@ export default function DashboardPage() {
   const obras = obrasData?.results ?? [];
   const obraSelecionada = obras.find((o) => o.id === obraParam);
 
+  const { data, isLoading } = useQuery({
+    queryKey: ["dashboard", params],
+    queryFn: () => dashboardApi.get(params),
+    enabled: Boolean(dataInicio && dataFim) && (!obraParam || !!obraSelecionada),
+  });
+
   useEffect(() => {
     if (obraSelecionada) {
       const range = getObraDashboardRange(obraSelecionada);
       setDataInicio(range.inicio);
       setDataFim(range.fim);
+      setPeriodoPreset("desde_inicio");
     } else if (!obraParam) {
       const range = getCurrentMonthRange();
       setDataInicio(range.inicio);
       setDataFim(range.fim);
+      setPeriodoPreset("mes_atual");
     }
   }, [obraSelecionada?.id, obraParam]);
 
@@ -97,11 +113,20 @@ export default function DashboardPage() {
       const range = getObraDashboardRange(obraSelecionada);
       setDataInicio(range.inicio);
       setDataFim(getTodayIso());
+      setPeriodoPreset("desde_inicio");
     } else {
       const range = getCurrentMonthRange();
       setDataInicio(range.inicio);
       setDataFim(range.fim);
+      setPeriodoPreset("mes_atual");
     }
+  }
+
+  function aplicarMesAtual() {
+    const range = getCurrentMonthRange();
+    setDataInicio(range.inicio);
+    setDataFim(range.fim);
+    setPeriodoPreset("mes_atual");
   }
 
   function setObra(value: string) {
@@ -139,8 +164,12 @@ export default function DashboardPage() {
       {obraSelecionada && periodoObra && (
         <p className="mb-4 text-sm text-brand-gray-muted">
           Período completo da obra: de{" "}
-          {formatDate(periodoObra.inicio)} até hoje. Ajuste as datas abaixo se
-          quiser filtrar um intervalo menor.
+          {formatDate(periodoObra.inicio)} até hoje
+          {obraSelecionada.data_primeira_operacao &&
+            obraSelecionada.data_inicio &&
+            obraSelecionada.data_primeira_operacao < obraSelecionada.data_inicio &&
+            " (inclui operações anteriores à data de início da obra)"}
+          . Ajuste as datas abaixo se quiser filtrar um intervalo menor.
         </p>
       )}
 
@@ -165,7 +194,10 @@ export default function DashboardPage() {
             De
             <DateField
               value={dataInicio}
-              onChange={setDataInicio}
+              onChange={(value) => {
+                setDataInicio(value);
+                setPeriodoPreset("custom");
+              }}
               className="text-sm"
             />
           </label>
@@ -173,26 +205,29 @@ export default function DashboardPage() {
             Até
             <DateField
               value={dataFim}
-              onChange={setDataFim}
+              onChange={(value) => {
+                setDataFim(value);
+                setPeriodoPreset("custom");
+              }}
               className="text-sm"
             />
           </label>
           <button
             type="button"
             onClick={resetPeriodo}
-            className="rounded border px-3 py-2 text-sm text-brand-gray hover:bg-brand-gray-light"
+            className={presetButtonClass(
+              obraSelecionada
+                ? periodoPreset === "desde_inicio"
+                : periodoPreset === "mes_atual"
+            )}
           >
             {obraSelecionada ? "Desde o início" : "Mês atual"}
           </button>
           {obraSelecionada && (
             <button
               type="button"
-              onClick={() => {
-                const range = getCurrentMonthRange();
-                setDataInicio(range.inicio);
-                setDataFim(range.fim);
-              }}
-              className="rounded border px-3 py-2 text-sm text-brand-gray hover:bg-brand-gray-light"
+              onClick={aplicarMesAtual}
+              className={presetButtonClass(periodoPreset === "mes_atual")}
             >
               Mês atual
             </button>
