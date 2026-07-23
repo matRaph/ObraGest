@@ -5,8 +5,8 @@ from .models import Categoria, Fornecedor, Obra, Operacao
 
 @admin.register(Obra)
 class ObraAdmin(admin.ModelAdmin):
-    list_display = ["nome", "cidade", "status", "data_inicio", "criado_em"]
-    list_filter = ["status", "cidade"]
+    list_display = ["nome", "cidade", "status", "arquivada", "data_inicio", "criado_em"]
+    list_filter = ["status", "arquivada", "cidade"]
     search_fields = ["nome", "cidade"]
 
 

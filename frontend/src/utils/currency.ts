@@ -1,6 +1,10 @@
 export function parseCurrencyToNumber(value: string): number {
   if (!value) return 0;
-  const n = parseFloat(value);
+  const sanitized = value.trim().replace(/[^\d,.-]/g, "");
+  const normalized = sanitized.includes(",")
+    ? sanitized.replace(/\./g, "").replace(",", ".")
+    : sanitized;
+  const n = Number.parseFloat(normalized);
   return Number.isFinite(n) ? n : 0;
 }
 

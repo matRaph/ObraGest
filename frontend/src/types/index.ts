@@ -8,6 +8,7 @@ export interface Obra {
   status: ObraStatus;
   data_inicio: string | null;
   descricao: string;
+  arquivada: boolean;
   criado_em: string;
   total_receitas: string;
   total_despesas: string;

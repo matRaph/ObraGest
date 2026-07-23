@@ -2,8 +2,6 @@ from decimal import Decimal
 import logging
 import zipfile
 
-logger = logging.getLogger(__name__)
-
 from django.db.models import (
     Case,
     DecimalField,
@@ -40,6 +38,9 @@ from .services.backup import (
     restore_backup_file,
 )
 from .services import google_drive
+
+
+logger = logging.getLogger(__name__)
 
 
 class FornecedorViewSet(viewsets.ModelViewSet):
@@ -104,6 +105,9 @@ class ObraViewSet(viewsets.ModelViewSet):
         status_filter = self.request.query_params.get("status")
         ordering = self.request.query_params.get("ordering", "-criado_em")
 
+        if self.action == "list":
+            arquivada = self.request.query_params.get("arquivada", "false").lower()
+            qs = qs.filter(arquivada=arquivada == "true")
         if cidade:
             qs = qs.filter(cidade__icontains=cidade)
         if status_filter:
@@ -129,7 +133,8 @@ class ObraViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def cidades(self, request):
         cidades = (
-            Obra.objects.values_list("cidade", flat=True)
+            Obra.objects.filter(arquivada=False)
+            .values_list("cidade", flat=True)
             .distinct()
             .order_by("cidade")
         )
