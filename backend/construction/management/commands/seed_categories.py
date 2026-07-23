@@ -29,13 +29,15 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        self._cleanup_legacy()
+        verbosity = options.get("verbosity", 1)
+        self._cleanup_legacy(verbosity=verbosity)
         created = self._seed_defaults()
-        self.stdout.write(
-            self.style.SUCCESS(f"Categorias padrão verificadas. {created} criada(s).")
-        )
+        if verbosity >= 1:
+            self.stdout.write(
+                self.style.SUCCESS(f"Categorias padrão verificadas. {created} criada(s).")
+            )
 
-    def _cleanup_legacy(self) -> None:
+    def _cleanup_legacy(self, *, verbosity: int = 1) -> None:
         for old_nome, tipo, new_nome in LEGACY_CATEGORIAS:
             legacy = Categoria.objects.filter(nome=old_nome, tipo=tipo, padrao=True).first()
             if not legacy:
@@ -49,7 +51,8 @@ class Command(BaseCommand):
             )
             Operacao.objects.filter(categoria=legacy).update(categoria=target)
             legacy.delete()
-            self.stdout.write(f"  Migrada categoria legada: {old_nome} → {new_nome} ({tipo})")
+            if verbosity >= 1:
+                self.stdout.write(f"  Migrada categoria legada: {old_nome} → {new_nome} ({tipo})")
 
     def _seed_defaults(self) -> int:
         created = 0
