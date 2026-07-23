@@ -13,10 +13,12 @@ export default function ObrasPage() {
   const [cidade, setCidade] = useState("");
   const [status, setStatus] = useState("");
   const [ordering, setOrdering] = useState("-criado_em");
+  const [mostrarArquivadas, setMostrarArquivadas] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyObraForm);
 
   const params: Record<string, string> = { ordering };
+  if (mostrarArquivadas) params.arquivada = "true";
   if (cidade) params.cidade = cidade;
   if (status) params.status = status;
 
@@ -52,16 +54,59 @@ export default function ObrasPage() {
     },
   });
 
+  const archiveMutation = useMutation({
+    mutationFn: ({ id, arquivada }: { id: string; arquivada: boolean }) =>
+      obrasApi.update(id, { arquivada }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["obras"] });
+      queryClient.invalidateQueries({ queryKey: ["cidades"] });
+    },
+  });
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-2xl font-semibold text-brand-gray">Obras</h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="rounded bg-brand-blue px-4 py-2 text-sm font-medium text-white hover:bg-brand-blue-dark"
-        >
-          {showForm ? "Cancelar" : "Nova obra"}
-        </button>
+        <div>
+          <h2 className="text-2xl font-semibold text-brand-gray">
+            {mostrarArquivadas ? "Obras arquivadas" : "Obras"}
+          </h2>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMostrarArquivadas(false)}
+              className={`rounded px-3 py-1 text-sm ${
+                !mostrarArquivadas
+                  ? "bg-brand-blue text-white"
+                  : "border text-brand-gray hover:bg-brand-gray-light"
+              }`}
+            >
+              Obras
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMostrarArquivadas(true);
+                setShowForm(false);
+                setForm(emptyObraForm);
+              }}
+              className={`rounded px-3 py-1 text-sm ${
+                mostrarArquivadas
+                  ? "bg-brand-blue text-white"
+                  : "border text-brand-gray hover:bg-brand-gray-light"
+              }`}
+            >
+              Arquivadas
+            </button>
+          </div>
+        </div>
+        {!mostrarArquivadas && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="rounded bg-brand-blue px-4 py-2 text-sm font-medium text-white hover:bg-brand-blue-dark"
+          >
+            {showForm ? "Cancelar" : "Nova obra"}
+          </button>
+        )}
       </div>
 
       {showForm && (
@@ -123,14 +168,34 @@ export default function ObrasPage() {
                 <Link to={`/obras/${obra.id}`} className="text-lg font-semibold text-brand-blue hover:underline">
                   {obra.nome}
                 </Link>
-                <button
-                  onClick={() => {
-                    if (confirm("Excluir esta obra?")) deleteMutation.mutate(obra.id);
-                  }}
-                  className="text-xs text-red-500 hover:text-red-700"
-                >
-                  Excluir
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      archiveMutation.mutate({
+                        id: obra.id,
+                        arquivada: !mostrarArquivadas,
+                      })
+                    }
+                    disabled={archiveMutation.isPending}
+                    className="text-xs text-brand-blue hover:underline disabled:opacity-50"
+                  >
+                    {mostrarArquivadas ? "Restaurar" : "Arquivar"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        confirm(
+                          "Excluir esta obra definitivamente? Todas as operações serão removidas."
+                        )
+                      )
+                        deleteMutation.mutate(obra.id);
+                    }}
+                    className="text-xs text-red-500 hover:text-red-700"
+                  >
+                    Excluir
+                  </button>
+                </div>
               </div>
               <span className="mt-1 inline-block rounded-full bg-brand-blue-light px-2.5 py-0.5 text-xs font-medium text-brand-blue">
                 {obra.cidade}
@@ -155,7 +220,9 @@ export default function ObrasPage() {
             </div>
           ))}
           {data?.results.length === 0 && (
-            <p className="col-span-full text-brand-gray-muted">Nenhuma obra cadastrada.</p>
+            <p className="col-span-full text-brand-gray-muted">
+              {mostrarArquivadas ? "Nenhuma obra arquivada." : "Nenhuma obra cadastrada."}
+            </p>
           )}
         </div>
       )}

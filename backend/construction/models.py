@@ -31,6 +31,7 @@ class Obra(models.Model):
     )
     data_inicio = models.DateField(null=True, blank=True)
     descricao = models.TextField(blank=True, max_length=DESCRICAO_MAX_LENGTH)
+    arquivada = models.BooleanField(default=False)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:

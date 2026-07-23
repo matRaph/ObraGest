@@ -12,6 +12,7 @@ Fluxo:
 from __future__ import annotations
 
 import ctypes
+import logging
 import os
 import socket
 import sys
@@ -31,6 +32,22 @@ HOSTS_FILE = r"C:\Windows\System32\drivers\etc\hosts"
 APP_URL = f"http://{HOSTS_DOMAIN}"
 SERVER_PORT = 80
 USING_HOSTS = False
+logger = logging.getLogger("obragest.launcher")
+
+
+def get_data_dir() -> Path:
+    return Path.home() / "ObraGest" / "data"
+
+
+def configure_logging() -> None:
+    data_dir = get_data_dir()
+    data_dir.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        filename=data_dir / "obragest.log",
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        encoding="utf-8",
+    )
 
 
 def is_admin() -> bool:
@@ -47,7 +64,7 @@ def request_admin_elevation() -> None:
     # rc > 32 = sucesso ao lançar o processo elevado
     if rc > 32:
         sys.exit(0)
-    print("[UAC] Elevação recusada — continuando em modo localhost (sem hosts).")
+    logger.warning("Elevação UAC recusada; continuando em modo localhost.")
 
 
 def _port_free(port: int) -> bool:
@@ -77,7 +94,7 @@ def configure_hosts() -> bool:
         if HOSTS_DOMAIN not in text:
             with open(HOSTS_FILE, "a", encoding="utf-8") as f:
                 f.write(f"\n{HOSTS_ENTRY}\n")
-            print(f"[hosts] Entrada '{HOSTS_DOMAIN}' adicionada.")
+            logger.info("Entrada de hosts adicionada para %s.", HOSTS_DOMAIN)
         else:
             # Garante linha 127.0.0.1 (evita entrada antiga apontando para outro IP)
             lines = text.splitlines()
@@ -95,12 +112,12 @@ def configure_hosts() -> bool:
                     changed = True
             if changed:
                 path.write_text("\n".join(updated) + "\n", encoding="utf-8")
-                print(f"[hosts] Entrada '{HOSTS_DOMAIN}' corrigida para 127.0.0.1.")
+                logger.info("Entrada de hosts corrigida para 127.0.0.1.")
             else:
-                print(f"[hosts] Entrada '{HOSTS_DOMAIN}' já configurada.")
+                logger.info("Entrada de hosts já configurada.")
         return True
-    except Exception as e:
-        print(f"[hosts] Aviso: não foi possível configurar — {e}")
+    except Exception:
+        logger.exception("Não foi possível configurar o arquivo hosts.")
         return False
 
 
@@ -112,22 +129,19 @@ def resolve_runtime_mode(hosts_ok: bool) -> None:
         USING_HOSTS = True
         SERVER_PORT = 80
         APP_URL = f"http://{HOSTS_DOMAIN}"
-        print(f"[modo] Produção local — {APP_URL}")
+        logger.info("Modo produção local: %s", APP_URL)
         return
 
     USING_HOSTS = False
     SERVER_PORT = 8080
     APP_URL = "http://localhost:8080"
     if not hosts_ok:
-        print(
-            "[modo] Fallback — hosts indisponível. "
-            "Abrindo localhost (evita o site público na internet)."
-        )
+        logger.warning("Hosts indisponível; usando localhost.")
     elif not is_admin():
-        print("[modo] Fallback — sem administrador; usando porta 8080.")
+        logger.warning("Sem administrador; usando porta 8080.")
     else:
-        print("[modo] Fallback — porta 80 ocupada; usando 8080.")
-    print(f"[modo] Acesse: {APP_URL}")
+        logger.warning("Porta 80 ocupada; usando porta 8080.")
+    logger.info("Aplicação disponível em %s", APP_URL)
 
 
 def get_bundle_dir() -> Path:
@@ -138,7 +152,7 @@ def get_bundle_dir() -> Path:
 
 def configure_environment() -> None:
     base_dir = get_bundle_dir()
-    data_dir = Path.home() / "ObraGest" / "data"
+    data_dir = get_data_dir()
     data_dir.mkdir(parents=True, exist_ok=True)
 
     os.environ["DJANGO_SETTINGS_MODULE"] = "obragest.settings"
@@ -179,34 +193,35 @@ def run_django_setup() -> None:
 
     frontend_dist = settings.FRONTEND_DIST
     if not frontend_dist.exists() or not (frontend_dist / "index.html").is_file():
-        print(
-            f"[AVISO] Frontend não encontrado em {frontend_dist}. "
-            "Recompile o build."
-        )
+        logger.warning("Frontend não encontrado em %s. Recompile o build.", frontend_dist)
     else:
-        print(f"Frontend OK: {frontend_dist}")
+        logger.info("Frontend OK: %s", frontend_dist)
 
     secrets = Path(settings.GOOGLE_OAUTH_CLIENT_SECRETS)
     if secrets.is_file():
-        print(f"Google OAuth OK: {secrets}")
+        logger.info("Google OAuth OK: %s", secrets)
     else:
-        print(
-            f"[AVISO] Google OAuth ausente ({secrets}). "
-            "Backup no Drive ficará indisponível neste build."
+        logger.warning(
+            "Google OAuth ausente (%s). Backup no Drive ficará indisponível.",
+            secrets,
         )
 
-    print("Verificando banco de dados...")
+    logger.info("Verificando banco de dados.")
     call_command("migrate", "--noinput", verbosity=0)
     call_command("seed_categories", verbosity=0)
-    print("Banco de dados pronto.")
+    logger.info("Banco de dados pronto.")
 
 
 def start_server() -> None:
     from waitress import serve
     from obragest.wsgi import application
 
-    print(f"Servidor iniciado — porta {SERVER_PORT}.")
-    serve(application, host="127.0.0.1", port=SERVER_PORT, threads=4)
+    logger.info("Servidor iniciado na porta %s.", SERVER_PORT)
+    try:
+        serve(application, host="127.0.0.1", port=SERVER_PORT, threads=4)
+    except Exception:
+        logger.exception("Falha no servidor Waitress.")
+        raise
 
 
 def wait_until_ready(timeout: float = 60.0) -> bool:
@@ -225,13 +240,10 @@ def wait_until_ready(timeout: float = 60.0) -> bool:
 
 
 def create_tray_icon():
-    from PIL import Image, ImageDraw
+    from PIL import Image
 
-    img = Image.new("RGB", (64, 64), color="#1e40af")
-    draw = ImageDraw.Draw(img)
-    draw.ellipse([8, 8, 56, 56], outline="white", width=6)
-    draw.ellipse([20, 20, 44, 44], fill="white")
-    return img
+    icon_path = get_bundle_dir() / "obragest-tray.png"
+    return Image.open(icon_path).convert("RGBA")
 
 
 def open_app() -> None:
@@ -244,12 +256,12 @@ def run_with_tray() -> None:
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
 
-    print("Aguardando servidor...")
+    logger.info("Aguardando servidor.")
     if wait_until_ready():
-        print("Abrindo navegador...")
+        logger.info("Abrindo navegador.")
         open_app()
     else:
-        print("[AVISO] Servidor demorou para responder; abrindo navegador mesmo assim.")
+        logger.warning("Servidor demorou para responder; abrindo navegador mesmo assim.")
         open_app()
 
     def on_open(icon, item):
@@ -269,8 +281,7 @@ def run_with_tray() -> None:
         ),
     )
 
-    print(f"\nObraGest rodando em {APP_URL}")
-    print("Clique com o botão direito no ícone da bandeja do sistema para encerrar.")
+    logger.info("ObraGest rodando em %s. Encerramento disponível pela bandeja.", APP_URL)
     icon.run()
 
 
@@ -278,11 +289,7 @@ def run_console_fallback() -> None:
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
 
-    print("\n" + "=" * 50)
-    print(f"  {APP_NAME} iniciado com sucesso!")
-    print(f"  Acesse: {APP_URL}")
-    print("  Feche esta janela para encerrar o sistema.")
-    print("=" * 50 + "\n")
+    logger.warning("Bandeja indisponível; executando em segundo plano em %s.", APP_URL)
 
     wait_until_ready()
     open_app()
@@ -295,12 +302,13 @@ def run_console_fallback() -> None:
 
 
 def main() -> None:
+    configure_logging()
     # Tenta admin (hosts / porta 80). Se recusar UAC, continua em localhost:8080.
     if not is_admin():
         request_admin_elevation()
         # Se chegou aqui, UAC foi recusado — segue sem elevação
 
-    print(f"=== {APP_NAME} ===")
+    logger.info("Iniciando %s.", APP_NAME)
     hosts_ok = configure_hosts()
     resolve_runtime_mode(hosts_ok)
     configure_environment()

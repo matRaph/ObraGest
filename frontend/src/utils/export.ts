@@ -1,5 +1,6 @@
 import type { DashboardData, Obra, Operacao } from "../types";
 import { statusLabels, tipoLabels } from "../api/client";
+import { parseCurrencyToNumber } from "./currency";
 
 // Gera e faz download de um arquivo CSV com BOM UTF-8 (compatível com Excel pt-BR)
 function downloadCsv(filename: string, rows: string[][]): void {
@@ -32,7 +33,7 @@ function downloadCsv(filename: string, rows: string[][]): void {
 }
 
 function formatValorCsv(valor: string | number): string {
-  const n = typeof valor === "string" ? parseFloat(valor) : valor;
+  const n = typeof valor === "string" ? parseCurrencyToNumber(valor) : valor;
   return n.toFixed(2).replace(".", ",");
 }
 

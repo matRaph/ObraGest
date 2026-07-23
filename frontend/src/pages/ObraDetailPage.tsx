@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -12,15 +12,14 @@ import {
   tipoLabels,
 } from "../api/client";
 import { exportarObra } from "../utils/export";
-import CategoriaSelect, { SubcategoriaSelect } from "../components/CategoriaSelect";
-import CurrencyField from "../components/CurrencyField";
-import DateField from "../components/DateField";
-import FieldLabel from "../components/FieldLabel";
-import FornecedorSelect from "../components/FornecedorSelect";
 import ObraForm, { emptyObraForm, obraToForm, type ObraFormData } from "../components/ObraForm";
-import { DESCRICAO_MAX_LENGTH, limitText } from "../constants/limits";
+import OperacaoForm, {
+  createEmptyOperacaoForm,
+  operacaoToForm,
+  type OperacaoFormData,
+} from "../components/OperacaoForm";
 import { formatQuantidade, parseCurrencyToNumber } from "../utils/currency";
-import type { Categoria, Fornecedor, TipoOperacao } from "../types";
+import type { Categoria, Fornecedor, Operacao, TipoOperacao } from "../types";
 
 const tipoValorClasses: Record<TipoOperacao, string> = {
   receita: "text-brand-green",
@@ -39,23 +38,24 @@ function calcPrecoUnitario(valor: string, quantidade: string) {
   return (parseCurrencyToNumber(valor) / qty).toFixed(2);
 }
 
-function calcValorTotal(precoUnitario: string, quantidade: string) {
-  const qty = parseNum(quantidade);
-  if (qty <= 0 || !precoUnitario) return "";
-  return (parseCurrencyToNumber(precoUnitario) * qty).toFixed(2);
+function buildOperacaoPayload(
+  form: OperacaoFormData,
+  unidadeHabilitada: boolean,
+  categorias: Categoria[]
+) {
+  const selectedTipo = categorias.find((categoria) => categoria.id === form.categoria)?.tipo;
+  const payload: Record<string, unknown> = {
+    categoria: form.categoria,
+    subcategoria: form.subcategoria || null,
+    fornecedor: form.fornecedor || null,
+    valor: form.valor,
+    quantidade: unidadeHabilitada && form.quantidade ? form.quantidade : null,
+    data: form.data,
+    descricao: form.descricao,
+  };
+  if (selectedTipo === "despesa") payload.pago = form.pago;
+  return payload;
 }
-
-const emptyForm = {
-  categoria: "",
-  subcategoria: "",
-  fornecedor: "",
-  valor: "",
-  precoUnitario: "",
-  quantidade: "",
-  data: new Date().toISOString().slice(0, 10),
-  descricao: "",
-  pago: true,
-};
 
 export default function ObraDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -63,8 +63,12 @@ export default function ObraDetailPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingObra, setEditingObra] = useState(false);
   const [obraForm, setObraForm] = useState<ObraFormData>(emptyObraForm);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<OperacaoFormData>(createEmptyOperacaoForm);
   const [unidadeHabilitada, setUnidadeHabilitada] = useState(false);
+  const [editingOperacao, setEditingOperacao] = useState<Operacao | null>(null);
+  const [editForm, setEditForm] = useState<OperacaoFormData>(createEmptyOperacaoForm);
+  const [editUnidadeHabilitada, setEditUnidadeHabilitada] = useState(false);
+  const editDialogRef = useRef<HTMLDialogElement>(null);
 
   const [filtroTipo, setFiltroTipo] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
@@ -114,14 +118,26 @@ export default function ObraDetailPage() {
     if (obra) setObraForm(obraToForm(obra));
   }, [obra]);
 
-  const selectedCategoria = categorias.find((c) => c.id === form.categoria);
-  const selectedTipo = selectedCategoria?.tipo;
+  useEffect(() => {
+    const dialog = editDialogRef.current;
+    if (!dialog) return;
+    if (editingOperacao && !dialog.open) dialog.showModal();
+    if (!editingOperacao && dialog.open) dialog.close();
+  }, [editingOperacao]);
+
   const filtroCategoriaObj = categorias.find((c) => c.id === filtroCategoria);
 
   function invalidateAll() {
     queryClient.invalidateQueries({ queryKey: ["operacoes", id] });
     queryClient.invalidateQueries({ queryKey: ["obra", id] });
     queryClient.invalidateQueries({ queryKey: ["obras"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  }
+
+  function resetCreateForm() {
+    setForm(createEmptyOperacaoForm());
+    setUnidadeHabilitada(false);
+    setShowForm(false);
   }
 
   async function handleExportar() {
@@ -150,27 +166,40 @@ export default function ObraDetailPage() {
     },
   });
 
+  const archiveObraMutation = useMutation({
+    mutationFn: () => obrasApi.update(id!, { arquivada: !obra?.arquivada }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["obra", id] });
+      queryClient.invalidateQueries({ queryKey: ["obras"] });
+      queryClient.invalidateQueries({ queryKey: ["cidades"] });
+    },
+  });
+
   const createMutation = useMutation({
-    mutationFn: () => {
-      const payload: Record<string, unknown> = {
+    mutationFn: () =>
+      operacoesApi.create(id!, buildOperacaoPayload(form, unidadeHabilitada, categorias)),
+    onSuccess: () => {
+      invalidateAll();
+      setForm({
+        ...createEmptyOperacaoForm(),
         categoria: form.categoria,
-        subcategoria: form.subcategoria || null,
-        fornecedor: form.fornecedor || null,
-        valor: form.valor,
-        data: form.data,
-        descricao: form.descricao,
-      };
-      if (unidadeHabilitada && form.quantidade) {
-        payload.quantidade = form.quantidade;
-      }
-      if (selectedTipo === "despesa") payload.pago = form.pago;
-      return operacoesApi.create(id!, payload);
+        fornecedor: form.fornecedor,
+      });
+      setUnidadeHabilitada(false);
+    },
+  });
+
+  const updateOperacaoMutation = useMutation({
+    mutationFn: () => {
+      if (!editingOperacao) throw new Error("Nenhuma operação selecionada.");
+      return operacoesApi.update(
+        editingOperacao.id,
+        buildOperacaoPayload(editForm, editUnidadeHabilitada, categorias)
+      );
     },
     onSuccess: () => {
       invalidateAll();
-      setShowForm(false);
-      setUnidadeHabilitada(false);
-      setForm({ ...emptyForm, data: new Date().toISOString().slice(0, 10) });
+      setEditingOperacao(null);
     },
   });
 
@@ -205,6 +234,11 @@ export default function ObraDetailPage() {
                 {obra.cidade}
               </span>
               {statusLabels[obra.status]}
+              {obra.arquivada && (
+                <span className="ml-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  Arquivada
+                </span>
+              )}
               {obra.data_inicio && (
                 <span className="ml-2 text-xs text-brand-gray-muted">
                   · Início: {formatDate(obra.data_inicio)}
@@ -213,6 +247,14 @@ export default function ObraDetailPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => archiveObraMutation.mutate()}
+              disabled={archiveObraMutation.isPending}
+              className="rounded border px-3 py-1.5 text-sm text-brand-gray hover:bg-brand-gray-light disabled:opacity-50"
+            >
+              {obra.arquivada ? "Restaurar obra" : "Arquivar obra"}
+            </button>
             <Link
               to={`/dashboard?obra=${obra.id}`}
               className="rounded border px-3 py-1.5 text-sm text-brand-gray hover:bg-brand-gray-light"
@@ -295,10 +337,10 @@ export default function ObraDetailPage() {
         <button
           onClick={() => {
             if (showForm) {
-              setUnidadeHabilitada(false);
-              setForm({ ...emptyForm, data: new Date().toISOString().slice(0, 10) });
+              resetCreateForm();
+            } else {
+              setShowForm(true);
             }
-            setShowForm(!showForm);
           }}
           className="rounded bg-brand-blue px-4 py-2 text-sm text-white hover:bg-brand-blue-dark"
         >
@@ -307,157 +349,18 @@ export default function ObraDetailPage() {
       </div>
 
       {showForm && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createMutation.mutate();
-          }}
+        <OperacaoForm
+          form={form}
+          onChange={setForm}
+          categorias={categorias}
+          fornecedores={fornecedores}
+          unidadeHabilitada={unidadeHabilitada}
+          onUnidadeHabilitadaChange={setUnidadeHabilitada}
+          onSubmit={() => createMutation.mutate()}
+          isPending={createMutation.isPending}
+          submitLabel="Salvar operação"
           className="mb-4 rounded-lg border bg-white p-4 shadow-sm"
-        >
-          <div className="grid gap-3 md:grid-cols-2">
-            <CategoriaSelect
-              value={form.categoria}
-              onChange={(categoria) => setForm({ ...form, categoria, subcategoria: "" })}
-              categorias={categorias}
-            />
-            <SubcategoriaSelect
-              value={form.subcategoria}
-              onChange={(subcategoria) => setForm({ ...form, subcategoria })}
-              subcategorias={selectedCategoria?.subcategorias ?? []}
-              disabled={!selectedCategoria}
-            />
-            <FornecedorSelect
-              value={form.fornecedor}
-              onChange={(fornecedor) => setForm({ ...form, fornecedor })}
-              fornecedores={fornecedores}
-            />
-            <div className="md:col-span-2">
-              <label className="flex items-center gap-2 text-sm text-brand-gray">
-                <input
-                  type="checkbox"
-                  checked={unidadeHabilitada}
-                  onChange={(e) => {
-                    const habilitada = e.target.checked;
-                    setUnidadeHabilitada(habilitada);
-                    if (!habilitada) {
-                      setForm((prev) => ({ ...prev, quantidade: "", precoUnitario: "" }));
-                    }
-                  }}
-                  className="h-4 w-4"
-                />
-                Informar quantidade (unidade)
-              </label>
-            </div>
-            {unidadeHabilitada && (
-              <div>
-                <FieldLabel htmlFor="op-quantidade" label="Quantidade" />
-                <input
-                  id="op-quantidade"
-                  required
-                  type="number"
-                  step="0.0001"
-                  min="0.0001"
-                  placeholder="Ex.: 5"
-                  value={form.quantidade}
-                  onChange={(e) => {
-                    const quantidade = e.target.value;
-                    const qty = parseNum(quantidade);
-                    setForm((prev) => {
-                      const next = { ...prev, quantidade };
-                      if (qty > 0) {
-                        if (prev.precoUnitario) {
-                          next.valor = calcValorTotal(prev.precoUnitario, quantidade);
-                        } else if (prev.valor) {
-                          next.precoUnitario = calcPrecoUnitario(prev.valor, quantidade);
-                        }
-                      }
-                      return next;
-                    });
-                  }}
-                  className="w-full rounded border px-3 py-2"
-                />
-              </div>
-            )}
-            <CurrencyField
-              id="op-valor"
-              label="Valor"
-              required
-              value={form.valor}
-              onChange={(valor) => {
-                setForm((prev) => {
-                  const next = { ...prev, valor };
-                  if (unidadeHabilitada) {
-                    const qty = parseNum(prev.quantidade);
-                    if (qty > 0 && valor) {
-                      next.precoUnitario = calcPrecoUnitario(valor, prev.quantidade);
-                    }
-                  }
-                  return next;
-                });
-              }}
-            />
-            {unidadeHabilitada && (
-              <CurrencyField
-                id="op-preco-unitario"
-                label="Preço por unidade"
-                value={form.precoUnitario}
-                onChange={(precoUnitario) => {
-                  setForm((prev) => {
-                    const next = { ...prev, precoUnitario };
-                    const qty = parseNum(prev.quantidade);
-                    if (qty > 0 && precoUnitario) {
-                      next.valor = calcValorTotal(precoUnitario, prev.quantidade);
-                    }
-                    return next;
-                  });
-                }}
-              />
-            )}
-            <div>
-              <FieldLabel htmlFor="op-data" label="Data do lançamento" />
-              <DateField
-                id="op-data"
-                required
-                value={form.data}
-                onChange={(data) => setForm({ ...form, data })}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <FieldLabel htmlFor="op-descricao" label="Descrição" optional />
-              <input
-                id="op-descricao"
-                maxLength={DESCRICAO_MAX_LENGTH}
-                placeholder="Detalhes do lançamento"
-                value={form.descricao}
-                onChange={(e) =>
-                  setForm({ ...form, descricao: limitText(e.target.value, DESCRICAO_MAX_LENGTH) })
-                }
-                className="w-full rounded border px-3 py-2"
-              />
-            </div>
-            {selectedTipo === "despesa" && (
-              <label className="flex items-center gap-2 md:col-span-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-brand-gray">
-                <input
-                  type="checkbox"
-                  checked={form.pago}
-                  onChange={(e) => setForm({ ...form, pago: e.target.checked })}
-                  className="h-4 w-4"
-                />
-                Despesa já paga
-                <span className="text-xs text-brand-gray-muted">
-                  (se desmarcada, não entra no saldo nem nas despesas pagas)
-                </span>
-              </label>
-            )}
-          </div>
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="mt-3 rounded bg-brand-green px-4 py-2 text-sm text-white hover:bg-brand-green-dark disabled:opacity-50"
-          >
-            Salvar operação
-          </button>
-        </form>
+        />
       )}
 
       <div className="mb-4 flex flex-wrap gap-3">
@@ -619,6 +522,18 @@ export default function ObraDetailPage() {
                       <button
                         type="button"
                         onClick={() => {
+                          setEditForm(operacaoToForm(op));
+                          setEditUnidadeHabilitada(Boolean(op.quantidade));
+                          setEditingOperacao(op);
+                        }}
+                        title="Editar operação"
+                        className="inline-flex h-7 shrink-0 items-center justify-center rounded border px-2 text-xs font-medium text-brand-blue hover:bg-brand-blue-light"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
                           if (confirm("Excluir operação?")) deleteMutation.mutate(op.id);
                         }}
                         title="Excluir operação"
@@ -656,6 +571,37 @@ export default function ObraDetailPage() {
           </tbody>
         </table>
       </div>
+
+      <dialog
+        ref={editDialogRef}
+        onCancel={(event) => {
+          event.preventDefault();
+          setEditingOperacao(null);
+        }}
+        className="w-[min(48rem,calc(100%-2rem))] rounded-lg p-0 shadow-xl backdrop:bg-black/40"
+        aria-labelledby="editar-operacao-titulo"
+      >
+        <div className="p-5">
+          <h3 id="editar-operacao-titulo" className="mb-4 text-lg font-semibold text-brand-gray">
+            Editar operação
+          </h3>
+          {editingOperacao && (
+            <OperacaoForm
+              form={editForm}
+              onChange={setEditForm}
+              categorias={categorias}
+              fornecedores={fornecedores}
+              unidadeHabilitada={editUnidadeHabilitada}
+              onUnidadeHabilitadaChange={setEditUnidadeHabilitada}
+              onSubmit={() => updateOperacaoMutation.mutate()}
+              onCancel={() => setEditingOperacao(null)}
+              isPending={updateOperacaoMutation.isPending}
+              submitLabel="Salvar alterações"
+              idPrefix="edit-op"
+            />
+          )}
+        </div>
+      </dialog>
     </div>
   );
 }

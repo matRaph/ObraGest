@@ -30,6 +30,8 @@ _datas = [
     ('obragest', 'obragest'),
     # Templates
     ('templates', 'templates'),
+    # Identidade visual usada pelo ícone da bandeja
+    ('obragest-tray.png', '.'),
 ]
 
 # OAuth do Google embutido no .exe (gerado no CI a partir do secret)
@@ -129,10 +131,11 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     uac_admin=True,
+    icon='obragest.ico',
 )
