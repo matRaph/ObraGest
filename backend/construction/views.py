@@ -448,7 +448,12 @@ class GoogleDriveSyncView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
         except Exception as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": google_drive.friendly_drive_error(exc)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+                if google_drive.is_network_error(exc)
+                else status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         if result is None:
             return Response({"message": "Nenhuma alteração detectada no banco de dados."})
@@ -474,5 +479,10 @@ class GoogleDriveRestoreView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
         except Exception as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": google_drive.friendly_drive_error(exc)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+                if google_drive.is_network_error(exc)
+                else status.HTTP_400_BAD_REQUEST,
+            )
         return Response({"message": "Backup restaurado do Google Drive com sucesso."})
