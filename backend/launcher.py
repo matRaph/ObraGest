@@ -39,6 +39,14 @@ def get_data_dir() -> Path:
     return Path.home() / "ObraGest" / "data"
 
 
+def ensure_stdio() -> None:
+    """PyInstaller com console=False deixa stdout/stderr como None."""
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
+
 def configure_logging() -> None:
     data_dir = get_data_dir()
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -207,8 +215,21 @@ def run_django_setup() -> None:
         )
 
     logger.info("Verificando banco de dados.")
-    call_command("migrate", "--noinput", verbosity=0)
-    call_command("seed_categories", verbosity=0)
+    # Windowed PyInstaller: sys.stdout pode ser None — OutputWrapper quebra no write.
+    with open(os.devnull, "w", encoding="utf-8") as null_out:
+        call_command(
+            "migrate",
+            "--noinput",
+            verbosity=0,
+            stdout=null_out,
+            stderr=null_out,
+        )
+        call_command(
+            "seed_categories",
+            verbosity=0,
+            stdout=null_out,
+            stderr=null_out,
+        )
     logger.info("Banco de dados pronto.")
 
 
@@ -302,6 +323,7 @@ def run_console_fallback() -> None:
 
 
 def main() -> None:
+    ensure_stdio()
     configure_logging()
     # Tenta admin (hosts / porta 80). Se recusar UAC, continua em localhost:8080.
     if not is_admin():

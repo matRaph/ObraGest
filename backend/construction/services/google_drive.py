@@ -1,16 +1,19 @@
 import io
 import json
 import logging
+import socket
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import NoReturn
 
+import httplib2
 from django.conf import settings
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google_auth_httplib2 import AuthorizedHttp
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
@@ -28,6 +31,8 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 DRIVE_FOLDER_NAME = "ObraGest Backups"
 BACKUP_MIME = "application/zip"
 FOLDER_MIME = "application/vnd.google-apps.folder"
+# Timeout curto: WinError 10060 no Windows pode levar ~20s por tentativa.
+DRIVE_HTTP_TIMEOUT = 30
 REAUTH_MESSAGE = (
     "A autorização do Google Drive expirou ou foi revogada. "
     "Reconecte sua conta Google em Configurações."
@@ -43,6 +48,58 @@ class GoogleDriveReauthRequired(RuntimeError):
 
     def __init__(self, message: str = REAUTH_MESSAGE):
         super().__init__(message)
+
+
+def is_network_error(exc: BaseException) -> bool:
+    """Timeout/conexão recusada/DNS — típico de firewall ou internet instável."""
+    if isinstance(exc, (TimeoutError, socket.timeout, ConnectionError, OSError)):
+        return True
+    name = type(exc).__name().lower()
+    if "timeout" in name or "connection" in name:
+        return True
+    msg = str(exc).lower()
+    markers = (
+        "10060",
+        "10061",
+        "timed out",
+        "timeout",
+        "getaddrinfo",
+        "name or service not known",
+        "failed to establish",
+        "network is unreachable",
+        "connection refused",
+        "temporarily unavailable",
+    )
+    return any(m in msg for m in markers)
+
+
+def friendly_drive_error(exc: BaseException) -> str:
+    if isinstance(exc, GoogleDriveReauthRequired):
+        return str(exc)
+    if is_network_error(exc):
+        return (
+            "Não foi possível conectar aos servidores do Google. "
+            "Verifique a internet do computador, firewall/antivírus e "
+            "se www.googleapis.com não está bloqueado. "
+            "A conta continua conectada — tente sincronizar de novo quando a rede estiver ok."
+        )
+    return str(exc)
+
+
+def _record_sync_error(exc: BaseException) -> None:
+    state = _load_state()
+    state["last_sync_error"] = friendly_drive_error(exc)
+    state["last_sync_error_at"] = datetime.now().isoformat()
+    _save_state(state)
+
+
+def _clear_sync_error() -> None:
+    state = _load_state()
+    if "last_sync_error" not in state and "last_sync_error_at" not in state:
+        return
+    state.pop("last_sync_error", None)
+    state.pop("last_sync_error_at", None)
+    _save_state(state)
 
 
 def _token_path() -> Path:
@@ -188,7 +245,9 @@ def handle_oauth_callback(code: str, state: str | None) -> dict:
     flow.fetch_token(code=code, code_verifier=code_verifier)
     creds = flow.credentials
 
-    service = build("drive", "v3", credentials=creds)
+    service = build(
+        "drive", "v3", http=_authorized_http(creds), cache_discovery=False
+    )
     about = service.about().get(fields="user(emailAddress)").execute()
     email = about.get("user", {}).get("emailAddress", "")
 
@@ -206,6 +265,7 @@ def handle_oauth_callback(code: str, state: str | None) -> dict:
         "connected_at": datetime.now().isoformat(),
     }
     _save_token_data(token_data)
+    _clear_sync_error()
     return {"email": email}
 
 
@@ -224,6 +284,7 @@ def disconnect() -> None:
         except Exception:
             logger.warning("Não foi possível revogar o token no Google.", exc_info=True)
     _delete_token_data()
+    _clear_sync_error()
 
 
 def _invalidate_credentials(reason: Exception | None = None) -> NoReturn:
@@ -260,11 +321,16 @@ def _get_credentials() -> Credentials | None:
     return creds
 
 
+def _authorized_http(creds: Credentials) -> AuthorizedHttp:
+    http = httplib2.Http(timeout=DRIVE_HTTP_TIMEOUT)
+    return AuthorizedHttp(creds, http=http)
+
+
 def _get_service():
     creds = _get_credentials()
     if not creds:
         raise GoogleDriveReauthRequired("Google Drive não conectado.")
-    return build("drive", "v3", credentials=creds)
+    return build("drive", "v3", http=_authorized_http(creds), cache_discovery=False)
 
 
 def _ensure_file_in_folder(service, file_id: str, folder_id: str) -> None:
@@ -435,64 +501,84 @@ def upload_backup(force: bool = False) -> dict | None:
         if not force and not _needs_backup():
             return None
 
-        filename, buffer = build_backup_archive()
-        service = _get_service()
-        folder_id = _get_or_create_folder(service)
+        try:
+            filename, buffer = build_backup_archive()
+            service = _get_service()
+            folder_id = _get_or_create_folder(service)
 
-        metadata = {"name": filename, "parents": [folder_id]}
-        media = MediaIoBaseUpload(buffer, mimetype=BACKUP_MIME, resumable=False)
-        uploaded = (
-            service.files()
-            .create(body=metadata, media_body=media, fields="id, name, size, createdTime, parents")
-            .execute()
-        )
-        _ensure_file_in_folder(service, uploaded["id"], folder_id)
+            metadata = {"name": filename, "parents": [folder_id]}
+            media = MediaIoBaseUpload(buffer, mimetype=BACKUP_MIME, resumable=False)
+            uploaded = (
+                service.files()
+                .create(
+                    body=metadata,
+                    media_body=media,
+                    fields="id, name, size, createdTime, parents",
+                )
+                .execute()
+            )
+            _ensure_file_in_folder(service, uploaded["id"], folder_id)
+
+            mtime, size = _db_fingerprint()
+            state = _load_state()
+            state.update(
+                {
+                    "last_backup_at": datetime.now().isoformat(),
+                    "last_backup_id": uploaded["id"],
+                    "last_backup_name": uploaded["name"],
+                    "last_db_mtime": mtime,
+                    "last_db_size": size,
+                }
+            )
+            state.pop("last_sync_error", None)
+            state.pop("last_sync_error_at", None)
+            _save_state(state)
+            _prune_old_backups(service, folder_id)
+
+            return {
+                "id": uploaded["id"],
+                "nome": uploaded["name"],
+                "tamanho": int(uploaded.get("size", 0)),
+                "criado_em": uploaded.get("createdTime", ""),
+            }
+        except GoogleDriveReauthRequired:
+            raise
+        except Exception as exc:
+            _record_sync_error(exc)
+            raise
+
+
+def restore_from_drive(file_id: str) -> None:
+    try:
+        service = _get_service()
+        request = service.files().get_media(fileId=file_id)
+        buffer = io.BytesIO()
+        from googleapiclient.http import MediaIoBaseDownload
+
+        downloader = MediaIoBaseDownload(buffer, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+        buffer.seek(0)
+        restore_backup_file(buffer)
 
         mtime, size = _db_fingerprint()
         state = _load_state()
         state.update(
             {
-                "last_backup_at": datetime.now().isoformat(),
-                "last_backup_id": uploaded["id"],
-                "last_backup_name": uploaded["name"],
+                "last_restore_at": datetime.now().isoformat(),
                 "last_db_mtime": mtime,
                 "last_db_size": size,
             }
         )
+        state.pop("last_sync_error", None)
+        state.pop("last_sync_error_at", None)
         _save_state(state)
-        _prune_old_backups(service, folder_id)
-
-        return {
-            "id": uploaded["id"],
-            "nome": uploaded["name"],
-            "tamanho": int(uploaded.get("size", 0)),
-            "criado_em": uploaded.get("createdTime", ""),
-        }
-
-
-def restore_from_drive(file_id: str) -> None:
-    service = _get_service()
-    request = service.files().get_media(fileId=file_id)
-    buffer = io.BytesIO()
-    from googleapiclient.http import MediaIoBaseDownload
-
-    downloader = MediaIoBaseDownload(buffer, request)
-    done = False
-    while not done:
-        _, done = downloader.next_chunk()
-    buffer.seek(0)
-    restore_backup_file(buffer)
-
-    mtime, size = _db_fingerprint()
-    state = _load_state()
-    state.update(
-        {
-            "last_restore_at": datetime.now().isoformat(),
-            "last_db_mtime": mtime,
-            "last_db_size": size,
-        }
-    )
-    _save_state(state)
+    except GoogleDriveReauthRequired:
+        raise
+    except Exception as exc:
+        _record_sync_error(exc)
+        raise
 
 
 def maybe_restore_on_startup() -> bool:
@@ -531,21 +617,27 @@ def get_status() -> dict:
         "interval_minutes": settings.GOOGLE_DRIVE_BACKUP_INTERVAL_MINUTES,
         "max_backups": settings.GOOGLE_DRIVE_MAX_BACKUPS,
         "needs_reauth": False,
+        "backups": [],
     }
     if token:
         try:
             status["backups"] = list_drive_backups()
+            _clear_sync_error()
         except GoogleDriveReauthRequired as exc:
             status["connected"] = False
             status["email"] = None
             status["backups"] = []
             status["needs_reauth"] = True
             status["error"] = str(exc)
+            _clear_sync_error()
         except Exception as exc:
-            status["backups"] = []
-            status["error"] = str(exc)
-    else:
-        status["backups"] = []
+            message = friendly_drive_error(exc)
+            status["error"] = message
+            _record_sync_error(exc)
+    if not status.get("error"):
+        persisted = _load_state().get("last_sync_error")
+        if persisted:
+            status["error"] = persisted
     return status
 
 
@@ -560,8 +652,14 @@ def _scheduler_loop() -> None:
             logger.warning(
                 "Backup automático pausado: autorização do Google Drive expirada."
             )
-        except Exception:
-            logger.exception("Erro no backup automático do Google Drive.")
+        except Exception as exc:
+            if is_network_error(exc):
+                logger.warning(
+                    "Backup automático do Google Drive adiado (rede indisponível): %s",
+                    friendly_drive_error(exc),
+                )
+            else:
+                logger.exception("Erro no backup automático do Google Drive.")
         time.sleep(interval)
 
 
