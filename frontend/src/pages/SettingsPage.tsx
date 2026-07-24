@@ -78,6 +78,9 @@ export default function SettingsPage() {
     },
     onError: (err: unknown) => {
       setError(extractError(err, "Não foi possível sincronizar."));
+      if (needsReauth(err)) {
+        queryClient.invalidateQueries({ queryKey: ["google-drive-status"] });
+      }
     },
   });
 
@@ -90,6 +93,9 @@ export default function SettingsPage() {
     },
     onError: (err: unknown) => {
       setError(extractError(err, "Não foi possível restaurar o backup."));
+      if (needsReauth(err)) {
+        queryClient.invalidateQueries({ queryKey: ["google-drive-status"] });
+      }
     },
   });
 
@@ -131,13 +137,25 @@ export default function SettingsPage() {
         )}
 
         {!isLoading && driveStatus?.configured && !driveStatus.connected && (
-          <button
-            onClick={() => connectMutation.mutate()}
-            disabled={connectMutation.isPending}
-            className="rounded bg-brand-blue px-4 py-2 text-sm text-white hover:bg-brand-blue-dark disabled:opacity-50"
-          >
-            {connectMutation.isPending ? "Conectando..." : "Conectar Google Drive"}
-          </button>
+          <div className="space-y-3">
+            {(driveStatus.needs_reauth || driveStatus.error) && (
+              <p className="text-sm text-amber-700">
+                {driveStatus.error ||
+                  "A autorização do Google Drive expirou. Conecte novamente para retomar os backups."}
+              </p>
+            )}
+            <button
+              onClick={() => connectMutation.mutate()}
+              disabled={connectMutation.isPending}
+              className="rounded bg-brand-blue px-4 py-2 text-sm text-white hover:bg-brand-blue-dark disabled:opacity-50"
+            >
+              {connectMutation.isPending
+                ? "Conectando..."
+                : driveStatus.needs_reauth
+                  ? "Reconectar Google Drive"
+                  : "Conectar Google Drive"}
+            </button>
+          </div>
         )}
 
         {!isLoading && driveStatus?.connected && (
@@ -225,7 +243,7 @@ export default function SettingsPage() {
   );
 }
 
-function extractError(error: unknown, fallback: string) {
+function responseData(error: unknown): Record<string, unknown> | null {
   if (
     error &&
     typeof error === "object" &&
@@ -234,10 +252,22 @@ function extractError(error: unknown, fallback: string) {
     typeof error.response === "object" &&
     "data" in error.response &&
     error.response.data &&
-    typeof error.response.data === "object" &&
-    "error" in error.response.data
+    typeof error.response.data === "object"
   ) {
-    return String(error.response.data.error);
+    return error.response.data as Record<string, unknown>;
+  }
+  return null;
+}
+
+function extractError(error: unknown, fallback: string) {
+  const data = responseData(error);
+  if (data && "error" in data) {
+    return String(data.error);
   }
   return fallback;
+}
+
+function needsReauth(error: unknown) {
+  const data = responseData(error);
+  return Boolean(data?.needs_reauth);
 }

@@ -121,6 +121,7 @@ export interface GoogleDriveStatus {
   interval_minutes: number;
   max_backups: number;
   backups: DriveBackupInfo[];
+  needs_reauth?: boolean;
   error?: string;
 }
 
