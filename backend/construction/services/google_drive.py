@@ -5,8 +5,10 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import NoReturn
 
 from django.conf import settings
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -26,10 +28,21 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 DRIVE_FOLDER_NAME = "ObraGest Backups"
 BACKUP_MIME = "application/zip"
 FOLDER_MIME = "application/vnd.google-apps.folder"
+REAUTH_MESSAGE = (
+    "A autorização do Google Drive expirou ou foi revogada. "
+    "Reconecte sua conta Google em Configurações."
+)
 
 _scheduler_thread: threading.Thread | None = None
 _scheduler_lock = threading.Lock()
 _sync_lock = threading.Lock()
+
+
+class GoogleDriveReauthRequired(RuntimeError):
+    """Refresh token inválido; o usuário precisa reconectar o Google Drive."""
+
+    def __init__(self, message: str = REAUTH_MESSAGE):
+        super().__init__(message)
 
 
 def _token_path() -> Path:
@@ -197,19 +210,27 @@ def handle_oauth_callback(code: str, state: str | None) -> dict:
 
 
 def disconnect() -> None:
-    creds = _get_credentials()
-    if creds and creds.token:
+    data = _load_token_data()
+    token = data.get("token") if data else None
+    if token:
         try:
             import urllib.parse
             import urllib.request
 
-            params = urllib.parse.urlencode({"token": creds.token})
+            params = urllib.parse.urlencode({"token": token})
             urllib.request.urlopen(
                 f"https://oauth2.googleapis.com/revoke?{params}", timeout=10
             )
         except Exception:
             logger.warning("Não foi possível revogar o token no Google.", exc_info=True)
     _delete_token_data()
+
+
+def _invalidate_credentials(reason: Exception | None = None) -> NoReturn:
+    _delete_token_data()
+    if reason is not None:
+        logger.warning("Token Google Drive inválido; removido. Motivo: %s", reason)
+    raise GoogleDriveReauthRequired() from reason
 
 
 def _get_credentials() -> Credentials | None:
@@ -227,9 +248,14 @@ def _get_credentials() -> Credentials | None:
     )
 
     if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        data["token"] = creds.token
-        _save_token_data(data)
+        try:
+            creds.refresh(Request())
+            data["token"] = creds.token
+            _save_token_data(data)
+        except RefreshError as exc:
+            _invalidate_credentials(exc)
+    elif creds.expired:
+        _invalidate_credentials()
 
     return creds
 
@@ -237,7 +263,7 @@ def _get_credentials() -> Credentials | None:
 def _get_service():
     creds = _get_credentials()
     if not creds:
-        raise RuntimeError("Google Drive não conectado.")
+        raise GoogleDriveReauthRequired("Google Drive não conectado.")
     return build("drive", "v3", credentials=creds)
 
 
@@ -504,10 +530,17 @@ def get_status() -> dict:
         "last_backup_name": state.get("last_backup_name"),
         "interval_minutes": settings.GOOGLE_DRIVE_BACKUP_INTERVAL_MINUTES,
         "max_backups": settings.GOOGLE_DRIVE_MAX_BACKUPS,
+        "needs_reauth": False,
     }
     if token:
         try:
             status["backups"] = list_drive_backups()
+        except GoogleDriveReauthRequired as exc:
+            status["connected"] = False
+            status["email"] = None
+            status["backups"] = []
+            status["needs_reauth"] = True
+            status["error"] = str(exc)
         except Exception as exc:
             status["backups"] = []
             status["error"] = str(exc)
@@ -523,6 +556,10 @@ def _scheduler_loop() -> None:
         try:
             if is_connected():
                 upload_backup()
+        except GoogleDriveReauthRequired:
+            logger.warning(
+                "Backup automático pausado: autorização do Google Drive expirada."
+            )
         except Exception:
             logger.exception("Erro no backup automático do Google Drive.")
         time.sleep(interval)

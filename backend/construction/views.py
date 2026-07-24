@@ -434,11 +434,19 @@ class GoogleDriveSyncView(APIView):
     def post(self, request):
         if not google_drive.is_connected():
             return Response(
-                {"error": "Google Drive não conectado."},
+                {
+                    "error": "Google Drive não conectado.",
+                    "needs_reauth": True,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
             result = google_drive.upload_backup(force=True)
+        except google_drive.GoogleDriveReauthRequired as exc:
+            return Response(
+                {"error": str(exc), "needs_reauth": True},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         except Exception as exc:
             return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -460,6 +468,11 @@ class GoogleDriveRestoreView(APIView):
             )
         try:
             google_drive.restore_from_drive(file_id)
+        except google_drive.GoogleDriveReauthRequired as exc:
+            return Response(
+                {"error": str(exc), "needs_reauth": True},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         except Exception as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"message": "Backup restaurado do Google Drive com sucesso."})
