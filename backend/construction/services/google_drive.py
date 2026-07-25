@@ -54,7 +54,7 @@ def is_network_error(exc: BaseException) -> bool:
     """Timeout/conexão recusada/DNS — típico de firewall ou internet instável."""
     if isinstance(exc, (TimeoutError, socket.timeout, ConnectionError, OSError)):
         return True
-    name = type(exc).__name().lower()
+    name = exc.__class__.__name__.lower()
     if "timeout" in name or "connection" in name:
         return True
     msg = str(exc).lower()
@@ -74,8 +74,8 @@ def is_network_error(exc: BaseException) -> bool:
 
 
 def friendly_drive_error(exc: BaseException) -> str:
-    if isinstance(exc, GoogleDriveReauthRequired):
-        return str(exc)
+    if isinstance(exc, (GoogleDriveReauthRequired, RefreshError)):
+        return REAUTH_MESSAGE if isinstance(exc, RefreshError) else str(exc)
     if is_network_error(exc):
         return (
             "Não foi possível conectar aos servidores do Google. "
@@ -294,17 +294,46 @@ def _invalidate_credentials(reason: Exception | None = None) -> NoReturn:
     raise GoogleDriveReauthRequired() from reason
 
 
+def _oauth_client_config() -> tuple[str | None, str | None]:
+    path = _client_secrets_path()
+    if not path.exists():
+        return None, None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None, None
+    section = payload.get("installed") or payload.get("web") or {}
+    return section.get("client_id"), section.get("client_secret")
+
+
 def _get_credentials() -> Credentials | None:
     data = _load_token_data()
     if not data:
         return None
 
+    client_id, client_secret = _oauth_client_config()
+    if client_id and data.get("client_id") and client_id != data.get("client_id"):
+        logger.warning(
+            "client_id do token difere do arquivo de credenciais; use Reconectar Google Drive."
+        )
+
+    # Prefere o secret atual do arquivo — o token pode ter um secret antigo após rotação.
+    resolved_client_id = client_id or data.get("client_id")
+    resolved_client_secret = client_secret or data.get("client_secret")
+    if (
+        resolved_client_id != data.get("client_id")
+        or resolved_client_secret != data.get("client_secret")
+    ):
+        data["client_id"] = resolved_client_id
+        data["client_secret"] = resolved_client_secret
+        _save_token_data(data)
+
     creds = Credentials(
         token=data.get("token"),
         refresh_token=data.get("refresh_token"),
         token_uri=data.get("token_uri"),
-        client_id=data.get("client_id"),
-        client_secret=data.get("client_secret"),
+        client_id=resolved_client_id,
+        client_secret=resolved_client_secret,
         scopes=data.get("scopes", SCOPES),
     )
 
@@ -327,10 +356,13 @@ def _authorized_http(creds: Credentials) -> AuthorizedHttp:
 
 
 def _get_service():
-    creds = _get_credentials()
-    if not creds:
-        raise GoogleDriveReauthRequired("Google Drive não conectado.")
-    return build("drive", "v3", http=_authorized_http(creds), cache_discovery=False)
+    try:
+        creds = _get_credentials()
+        if not creds:
+            raise GoogleDriveReauthRequired("Google Drive não conectado.")
+        return build("drive", "v3", http=_authorized_http(creds), cache_discovery=False)
+    except RefreshError as exc:
+        _invalidate_credentials(exc)
 
 
 def _ensure_file_in_folder(service, file_id: str, folder_id: str) -> None:
@@ -541,6 +573,8 @@ def upload_backup(force: bool = False) -> dict | None:
                 "tamanho": int(uploaded.get("size", 0)),
                 "criado_em": uploaded.get("createdTime", ""),
             }
+        except RefreshError as exc:
+            _invalidate_credentials(exc)
         except GoogleDriveReauthRequired:
             raise
         except Exception as exc:
@@ -574,6 +608,8 @@ def restore_from_drive(file_id: str) -> None:
         state.pop("last_sync_error", None)
         state.pop("last_sync_error_at", None)
         _save_state(state)
+    except RefreshError as exc:
+        _invalidate_credentials(exc)
     except GoogleDriveReauthRequired:
         raise
     except Exception as exc:
@@ -623,12 +659,18 @@ def get_status() -> dict:
         try:
             status["backups"] = list_drive_backups()
             _clear_sync_error()
-        except GoogleDriveReauthRequired as exc:
+        except (GoogleDriveReauthRequired, RefreshError) as exc:
+            if isinstance(exc, RefreshError):
+                _delete_token_data()
             status["connected"] = False
             status["email"] = None
             status["backups"] = []
             status["needs_reauth"] = True
-            status["error"] = str(exc)
+            status["error"] = (
+                str(exc)
+                if isinstance(exc, GoogleDriveReauthRequired)
+                else REAUTH_MESSAGE
+            )
             _clear_sync_error()
         except Exception as exc:
             message = friendly_drive_error(exc)
@@ -648,7 +690,9 @@ def _scheduler_loop() -> None:
         try:
             if is_connected():
                 upload_backup()
-        except GoogleDriveReauthRequired:
+        except (GoogleDriveReauthRequired, RefreshError) as exc:
+            if isinstance(exc, RefreshError):
+                _delete_token_data()
             logger.warning(
                 "Backup automático pausado: autorização do Google Drive expirada."
             )
