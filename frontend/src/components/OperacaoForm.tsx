@@ -4,7 +4,7 @@ import DateField from "./DateField";
 import FieldLabel from "./FieldLabel";
 import FornecedorSelect from "./FornecedorSelect";
 import { DESCRICAO_MAX_LENGTH, limitText } from "../constants/limits";
-import { formatCurrencyMask, parseCurrencyToNumber } from "../utils/currency";
+import { parseCurrencyToNumber } from "../utils/currency";
 import type { Categoria, Fornecedor, Operacao } from "../types";
 
 export interface OperacaoFormData {
@@ -12,6 +12,7 @@ export interface OperacaoFormData {
   subcategoria: string;
   fornecedor: string;
   valor: string;
+  precoUnitario: string;
   quantidade: string;
   data: string;
   descricao: string;
@@ -24,6 +25,7 @@ export function createEmptyOperacaoForm(): OperacaoFormData {
     subcategoria: "",
     fornecedor: "",
     valor: "",
+    precoUnitario: "",
     quantidade: "",
     data: new Date().toISOString().slice(0, 10),
     descricao: "",
@@ -32,11 +34,16 @@ export function createEmptyOperacaoForm(): OperacaoFormData {
 }
 
 export function operacaoToForm(operacao: Operacao): OperacaoFormData {
+  const quantidade = Number.parseFloat(operacao.quantidade ?? "");
   return {
     categoria: operacao.categoria,
     subcategoria: operacao.subcategoria ?? "",
     fornecedor: operacao.fornecedor ?? "",
     valor: operacao.valor,
+    precoUnitario:
+      Number.isFinite(quantidade) && quantidade > 0
+        ? (parseCurrencyToNumber(operacao.valor) / quantidade).toFixed(2)
+        : "",
     quantidade: operacao.quantidade ?? "",
     data: operacao.data,
     descricao: operacao.descricao,
@@ -64,6 +71,18 @@ function parseQuantidade(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function calcPrecoUnitario(valor: string, quantidade: string) {
+  const quantidadeNumerica = parseQuantidade(quantidade);
+  if (quantidadeNumerica <= 0 || !valor) return "";
+  return (parseCurrencyToNumber(valor) / quantidadeNumerica).toFixed(2);
+}
+
+function calcValorTotal(precoUnitario: string, quantidade: string) {
+  const quantidadeNumerica = parseQuantidade(quantidade);
+  if (quantidadeNumerica <= 0 || !precoUnitario) return "";
+  return (parseCurrencyToNumber(precoUnitario) * quantidadeNumerica).toFixed(2);
+}
+
 export default function OperacaoForm({
   form,
   onChange,
@@ -79,12 +98,6 @@ export default function OperacaoForm({
   idPrefix = "op",
 }: OperacaoFormProps) {
   const selectedCategoria = categorias.find((categoria) => categoria.id === form.categoria);
-  const quantidade = parseQuantidade(form.quantidade);
-  const precoUnitario =
-    unidadeHabilitada && quantidade > 0 && form.valor
-      ? parseCurrencyToNumber(form.valor) / quantidade
-      : 0;
-
   return (
     <form
       onSubmit={(event) => {
@@ -118,7 +131,7 @@ export default function OperacaoForm({
               onChange={(event) => {
                 const enabled = event.target.checked;
                 onUnidadeHabilitadaChange(enabled);
-                if (!enabled) onChange({ ...form, quantidade: "" });
+                if (!enabled) onChange({ ...form, quantidade: "", precoUnitario: "" });
               }}
               className="h-4 w-4"
             />
@@ -136,7 +149,18 @@ export default function OperacaoForm({
               min="0.0001"
               placeholder="Ex.: 5"
               value={form.quantidade}
-              onChange={(event) => onChange({ ...form, quantidade: event.target.value })}
+              onChange={(event) => {
+                const quantidade = event.target.value;
+                const next = { ...form, quantidade };
+                if (parseQuantidade(quantidade) > 0) {
+                  if (form.precoUnitario) {
+                    next.valor = calcValorTotal(form.precoUnitario, quantidade);
+                  } else if (form.valor) {
+                    next.precoUnitario = calcPrecoUnitario(form.valor, quantidade);
+                  }
+                }
+                onChange(next);
+              }}
               className="w-full rounded border px-3 py-2"
             />
           </div>
@@ -146,19 +170,33 @@ export default function OperacaoForm({
           label="Valor total"
           required
           value={form.valor}
-          onChange={(valor) => onChange({ ...form, valor })}
+          onChange={(valor) =>
+            onChange({
+              ...form,
+              valor,
+              precoUnitario:
+                unidadeHabilitada && parseQuantidade(form.quantidade) > 0
+                  ? calcPrecoUnitario(valor, form.quantidade)
+                  : form.precoUnitario,
+            })
+          }
         />
         {unidadeHabilitada && (
-          <div>
-            <FieldLabel htmlFor={`${idPrefix}-preco-unitario`} label="Preço por unidade" />
-            <input
-              id={`${idPrefix}-preco-unitario`}
-              value={precoUnitario > 0 ? formatCurrencyMask(precoUnitario) : ""}
-              readOnly
-              placeholder="Calculado automaticamente"
-              className="w-full rounded border bg-brand-gray-light px-3 py-2 text-brand-gray-muted"
-            />
-          </div>
+          <CurrencyField
+            id={`${idPrefix}-preco-unitario`}
+            label="Preço por unidade"
+            value={form.precoUnitario}
+            onChange={(precoUnitario) =>
+              onChange({
+                ...form,
+                precoUnitario,
+                valor:
+                  parseQuantidade(form.quantidade) > 0
+                    ? calcValorTotal(precoUnitario, form.quantidade)
+                    : form.valor,
+              })
+            }
+          />
         )}
         <div>
           <FieldLabel htmlFor={`${idPrefix}-data`} label="Data do lançamento" />

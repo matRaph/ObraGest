@@ -66,6 +66,18 @@ export const dashboardApi = {
     api.get<DashboardData>("/dashboard/", { params }).then((r) => r.data),
 };
 
+export const backupApi = {
+  restoreFile: (file: File) => {
+    const data = new FormData();
+    data.append("file", file);
+    return api
+      .post<{ message: string }>("/backup/restore/", data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
+      .then((response) => response.data);
+  },
+};
+
 export const googleDriveApi = {
   status: () =>
     api.get<GoogleDriveStatus>("/google-drive/status/").then((r) => r.data),

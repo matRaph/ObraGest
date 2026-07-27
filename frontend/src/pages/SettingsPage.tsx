@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { googleDriveApi } from "../api/client";
+import { useEffect, useRef, useState } from "react";
+import { backupApi, googleDriveApi } from "../api/client";
 import type { DriveBackupInfo } from "../types";
 
 function formatBytes(bytes: number) {
@@ -18,6 +18,8 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [backupFile, setBackupFile] = useState<File | null>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
 
   const { data: driveStatus, isLoading, refetch } = useQuery({
     queryKey: ["google-drive-status"],
@@ -99,6 +101,21 @@ export default function SettingsPage() {
     },
   });
 
+  const restoreFileMutation = useMutation({
+    mutationFn: (file: File) => backupApi.restoreFile(file),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries();
+      setMessage(data.message);
+      setError(null);
+      setBackupFile(null);
+      if (backupInputRef.current) backupInputRef.current.value = "";
+    },
+    onError: (err: unknown) => {
+      setError(extractError(err, "Não foi possível restaurar o arquivo de backup."));
+      setMessage(null);
+    },
+  });
+
   function handleDisconnect() {
     if (confirm("Desconectar o Google Drive? Os backups na nuvem serão mantidos.")) {
       disconnectMutation.mutate();
@@ -115,9 +132,52 @@ export default function SettingsPage() {
     }
   }
 
+  function handleRestoreFile() {
+    if (
+      backupFile &&
+      confirm(
+        `Restaurar o backup "${backupFile.name}"? Os dados atuais serão substituídos.`
+      )
+    ) {
+      restoreFileMutation.mutate(backupFile);
+    }
+  }
+
   return (
     <div>
       <h2 className="mb-6 text-2xl font-semibold text-brand-gray">Configurações</h2>
+
+      {message && <p className="mb-4 text-sm text-brand-green">{message}</p>}
+      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+      <div className="mb-6 rounded-lg border bg-white p-6 shadow-sm">
+        <h3 className="mb-2 font-medium text-brand-gray">Restaurar backup manual</h3>
+        <p className="mb-4 text-sm text-brand-gray-muted">
+          Selecione um arquivo ZIP gerado pelo ObraGest. A restauração substituirá os
+          dados atuais.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            ref={backupInputRef}
+            type="file"
+            accept=".zip,application/zip"
+            onChange={(event) => {
+              setBackupFile(event.target.files?.[0] ?? null);
+              setMessage(null);
+              setError(null);
+            }}
+            className="max-w-full text-sm text-brand-gray file:mr-3 file:rounded file:border-0 file:bg-brand-gray-light file:px-3 file:py-2 file:text-sm file:text-brand-gray"
+          />
+          <button
+            type="button"
+            onClick={handleRestoreFile}
+            disabled={!backupFile || restoreFileMutation.isPending}
+            className="rounded bg-orange-600 px-4 py-2 text-sm text-white hover:bg-orange-700 disabled:opacity-50"
+          >
+            {restoreFileMutation.isPending ? "Restaurando..." : "Restaurar arquivo"}
+          </button>
+        </div>
+      </div>
 
       <div className="rounded-lg border bg-white p-6 shadow-sm">
         <h3 className="mb-2 font-medium text-brand-gray">Backup no Google Drive</h3>
@@ -236,8 +296,6 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {message && <p className="mt-4 text-sm text-brand-green">{message}</p>}
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
       </div>
     </div>
   );
