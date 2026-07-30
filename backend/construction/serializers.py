@@ -92,7 +92,7 @@ def _obra_totais(obra: Obra) -> dict:
                 despesas_pagas += op.valor
             else:
                 despesas_pendentes += op.valor
-        elif op.tipo == TipoOperacao.INVESTIMENTO:
+        if op.contabiliza_como_investimento:
             investimentos += op.valor
 
     return {
@@ -223,6 +223,7 @@ class OperacaoSerializer(serializers.ModelSerializer):
             "data",
             "tipo",
             "pago",
+            "tambem_investimento",
             "descricao",
             "criado_em",
         ]
@@ -244,6 +245,10 @@ class OperacaoSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         categoria = attrs.get("categoria", getattr(self.instance, "categoria", None))
+        tambem_investimento = attrs.get(
+            "tambem_investimento",
+            getattr(self.instance, "tambem_investimento", False),
+        )
         subcategoria = attrs.get(
             "subcategoria", getattr(self.instance, "subcategoria", None)
         )
@@ -256,4 +261,14 @@ class OperacaoSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"subcategoria": "A subcategoria não pertence à categoria escolhida."}
                 )
+        if tambem_investimento and (
+            categoria is None or categoria.tipo != TipoOperacao.DESPESA
+        ):
+            raise serializers.ValidationError(
+                {
+                    "tambem_investimento": (
+                        "Apenas despesas podem ser lançadas também como investimento."
+                    )
+                }
+            )
         return attrs

@@ -57,6 +57,7 @@ export interface Operacao {
   data: string;
   tipo: TipoOperacao;
   pago: boolean;
+  tambem_investimento: boolean;
   descricao: string;
   criado_em: string;
 }

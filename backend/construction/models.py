@@ -128,6 +128,7 @@ class Operacao(models.Model):
     data = models.DateField()
     tipo = models.CharField(max_length=12, choices=TipoOperacao.choices)
     pago = models.BooleanField(default=True)
+    tambem_investimento = models.BooleanField(default=False)
     descricao = models.TextField(blank=True, max_length=DESCRICAO_MAX_LENGTH)
     criado_em = models.DateTimeField(auto_now_add=True)
 
@@ -139,7 +140,16 @@ class Operacao(models.Model):
         self.tipo = self.categoria.tipo
         if self.tipo != TipoOperacao.DESPESA:
             self.pago = True
+            self.tambem_investimento = False
         super().save(*args, **kwargs)
+
+    @property
+    def contabiliza_como_investimento(self) -> bool:
+        return self.tipo == TipoOperacao.INVESTIMENTO or (
+            self.tipo == TipoOperacao.DESPESA
+            and self.tambem_investimento
+            and self.pago
+        )
 
     def __str__(self) -> str:
         return f"{self.obra.nome} - {self.valor}"

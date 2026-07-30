@@ -149,17 +149,32 @@ class ObraViewSet(viewsets.ModelViewSet):
             tipo = request.query_params.get("tipo")
             categoria = request.query_params.get("categoria")
             subcategoria = request.query_params.get("subcategoria")
+            fornecedor = request.query_params.get("fornecedor")
+            descricao = request.query_params.get("descricao", "").strip()
             pago = request.query_params.get("pago")
             data_inicio = request.query_params.get("data_inicio")
             data_fim = request.query_params.get("data_fim")
             ordering = request.query_params.get("ordering", "-data")
 
-            if tipo:
+            if tipo == TipoOperacao.INVESTIMENTO:
+                qs = qs.filter(
+                    Q(tipo=TipoOperacao.INVESTIMENTO)
+                    | Q(
+                        tipo=TipoOperacao.DESPESA,
+                        tambem_investimento=True,
+                        pago=True,
+                    )
+                )
+            elif tipo:
                 qs = qs.filter(tipo=tipo)
             if categoria:
                 qs = qs.filter(categoria_id=categoria)
             if subcategoria:
                 qs = qs.filter(subcategoria_id=subcategoria)
+            if fornecedor:
+                qs = qs.filter(fornecedor_id=fornecedor)
+            if descricao:
+                qs = qs.filter(descricao__icontains=descricao)
             if pago in ("true", "false"):
                 qs = qs.filter(pago=(pago == "true"))
             if data_inicio:
@@ -223,6 +238,33 @@ class DashboardView(APIView):
                 return -op.valor
             return Decimal("0")
 
+        def _somar_categoria(op, tipo_visao: str) -> None:
+            cat_key = f"{op.categoria_id}:{tipo_visao}"
+            if cat_key not in por_categoria:
+                por_categoria[cat_key] = {
+                    "categoria_id": op.categoria_id,
+                    "nome": op.categoria.nome,
+                    "tipo": tipo_visao,
+                    "total": Decimal("0"),
+                    "_subs": {},
+                }
+            entry = por_categoria[cat_key]
+            entry["total"] += op.valor
+
+            sub_key = (
+                str(op.subcategoria_id) if op.subcategoria_id else "__none__"
+            )
+            sub_nome = (
+                op.subcategoria.nome if op.subcategoria_id else "Sem subcategoria"
+            )
+            if sub_key not in entry["_subs"]:
+                entry["_subs"][sub_key] = {
+                    "subcategoria_id": op.subcategoria_id,
+                    "nome": sub_nome,
+                    "total": Decimal("0"),
+                }
+            entry["_subs"][sub_key]["total"] += op.valor
+
         for op in operacoes:
             delta = _delta(op)
             if op.tipo == TipoOperacao.RECEITA:
@@ -232,7 +274,7 @@ class DashboardView(APIView):
                     total_despesas += op.valor
                 else:
                     total_despesas_pendentes += op.valor
-            elif op.tipo == TipoOperacao.INVESTIMENTO:
+            if op.contabiliza_como_investimento:
                 total_investimentos += op.valor
 
             obra_key = str(op.obra_id)
@@ -261,31 +303,17 @@ class DashboardView(APIView):
                     bucket["receitas"] += op.valor
                 elif op.tipo == TipoOperacao.DESPESA and op.pago:
                     bucket["despesas"] += op.valor
-                elif op.tipo == TipoOperacao.INVESTIMENTO:
+                if op.contabiliza_como_investimento:
                     bucket["investimentos"] += op.valor
                 bucket["saldo"] += delta
 
-            cat_key = str(op.categoria_id)
-            if cat_key not in por_categoria:
-                por_categoria[cat_key] = {
-                    "categoria_id": op.categoria_id,
-                    "nome": op.categoria.nome,
-                    "tipo": op.categoria.tipo,
-                    "total": Decimal("0"),
-                    "_subs": {},
-                }
-            entry = por_categoria[cat_key]
-            entry["total"] += op.valor
-
-            sub_key = str(op.subcategoria_id) if op.subcategoria_id else "__none__"
-            sub_nome = op.subcategoria.nome if op.subcategoria_id else "Sem subcategoria"
-            if sub_key not in entry["_subs"]:
-                entry["_subs"][sub_key] = {
-                    "subcategoria_id": op.subcategoria_id,
-                    "nome": sub_nome,
-                    "total": Decimal("0"),
-                }
-            entry["_subs"][sub_key]["total"] += op.valor
+            _somar_categoria(op, op.tipo)
+            if (
+                op.tipo == TipoOperacao.DESPESA
+                and op.tambem_investimento
+                and op.pago
+            ):
+                _somar_categoria(op, TipoOperacao.INVESTIMENTO)
 
         categorias = []
         for entry in sorted(

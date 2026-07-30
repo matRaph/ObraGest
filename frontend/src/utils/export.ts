@@ -1,6 +1,6 @@
 import type { DashboardData, Obra, Operacao } from "../types";
 import { statusLabels, tipoLabels } from "../api/client";
-import { parseCurrencyToNumber } from "./currency";
+import { formatQuantidade, parseCurrencyToNumber } from "./currency";
 
 // Gera e faz download de um arquivo CSV com BOM UTF-8 (compatível com Excel pt-BR)
 function downloadCsv(filename: string, rows: string[][]): void {
@@ -74,13 +74,15 @@ export function exportarObra(obra: Obra, operacoes: Operacao[]): void {
   for (const op of operacoes) {
     rows.push([
       formatDataBr(op.data),
-      tipoLabels[op.tipo] ?? op.tipo,
+      op.tipo === "despesa" && op.tambem_investimento
+        ? "Despesa / Investimento"
+        : tipoLabels[op.tipo] ?? op.tipo,
       op.categoria_nome,
       op.subcategoria_nome ?? "",
       op.fornecedor_nome ?? "",
       op.descricao ?? "",
       op.tipo === "despesa" ? (op.pago ? "Paga" : "Não paga") : "",
-      op.quantidade ?? "",
+      op.quantidade ? formatQuantidade(op.quantidade) : "",
       formatValorCsv(op.valor),
     ]);
   }

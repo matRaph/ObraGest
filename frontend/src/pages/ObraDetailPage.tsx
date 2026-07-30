@@ -54,6 +54,8 @@ function buildOperacaoPayload(
     descricao: form.descricao,
   };
   if (selectedTipo === "despesa") payload.pago = form.pago;
+  payload.tambem_investimento =
+    selectedTipo === "despesa" && form.tambem_investimento;
   return payload;
 }
 
@@ -73,6 +75,9 @@ export default function ObraDetailPage() {
   const [filtroTipo, setFiltroTipo] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
   const [filtroSubcategoria, setFiltroSubcategoria] = useState("");
+  const [filtroFornecedor, setFiltroFornecedor] = useState("");
+  const [filtroDescricao, setFiltroDescricao] = useState("");
+  const [descricaoDebounced, setDescricaoDebounced] = useState("");
   const [filtroPago, setFiltroPago] = useState("");
   const [exportando, setExportando] = useState(false);
 
@@ -99,9 +104,18 @@ export default function ObraDetailPage() {
     if (filtroTipo) params.tipo = filtroTipo;
     if (filtroCategoria) params.categoria = filtroCategoria;
     if (filtroSubcategoria) params.subcategoria = filtroSubcategoria;
+    if (filtroFornecedor) params.fornecedor = filtroFornecedor;
+    if (descricaoDebounced) params.descricao = descricaoDebounced;
     if (filtroPago) params.pago = filtroPago;
     return params;
-  }, [filtroTipo, filtroCategoria, filtroSubcategoria, filtroPago]);
+  }, [
+    filtroTipo,
+    filtroCategoria,
+    filtroSubcategoria,
+    filtroFornecedor,
+    descricaoDebounced,
+    filtroPago,
+  ]);
 
   const { data: operacoes } = useQuery({
     queryKey: ["operacoes", id, listParams],
@@ -117,6 +131,14 @@ export default function ObraDetailPage() {
   useEffect(() => {
     if (obra) setObraForm(obraToForm(obra));
   }, [obra]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setDescricaoDebounced(filtroDescricao.trim()),
+      300
+    );
+    return () => window.clearTimeout(timer);
+  }, [filtroDescricao]);
 
   useEffect(() => {
     const dialog = editDialogRef.current;
@@ -388,7 +410,12 @@ export default function ObraDetailPage() {
         >
           <option value="">Todas as categorias</option>
           {categorias
-            .filter((c) => !filtroTipo || c.tipo === filtroTipo)
+            .filter(
+              (c) =>
+                !filtroTipo ||
+                c.tipo === filtroTipo ||
+                (filtroTipo === "investimento" && c.tipo === "despesa")
+            )
             .map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nome}
@@ -417,13 +444,41 @@ export default function ObraDetailPage() {
           <option value="true">Somente pagas</option>
           <option value="false">Somente não pagas</option>
         </select>
-        {(filtroTipo || filtroCategoria || filtroSubcategoria || filtroPago) && (
+        <select
+          value={filtroFornecedor}
+          onChange={(e) => setFiltroFornecedor(e.target.value)}
+          className="rounded border px-3 py-2 text-sm"
+        >
+          <option value="">Todos os fornecedores</option>
+          {fornecedores.map((fornecedor) => (
+            <option key={fornecedor.id} value={fornecedor.id}>
+              {fornecedor.nome}
+            </option>
+          ))}
+        </select>
+        <input
+          type="search"
+          value={filtroDescricao}
+          onChange={(e) => setFiltroDescricao(e.target.value)}
+          placeholder="Buscar na descrição"
+          aria-label="Buscar operações por descrição"
+          className="min-w-52 rounded border px-3 py-2 text-sm"
+        />
+        {(filtroTipo ||
+          filtroCategoria ||
+          filtroSubcategoria ||
+          filtroFornecedor ||
+          filtroDescricao ||
+          filtroPago) && (
           <button
             type="button"
             onClick={() => {
               setFiltroTipo("");
               setFiltroCategoria("");
               setFiltroSubcategoria("");
+              setFiltroFornecedor("");
+              setFiltroDescricao("");
+              setDescricaoDebounced("");
               setFiltroPago("");
             }}
             className="rounded border px-3 py-2 text-sm text-brand-gray hover:bg-brand-gray-light"
@@ -468,7 +523,11 @@ export default function ObraDetailPage() {
                   </td>
                   <td className="px-4 py-3">{op.fornecedor_nome || "—"}</td>
                   <td className="px-4 py-3">{op.descricao || "—"}</td>
-                  <td className="px-4 py-3">{tipoLabels[op.tipo] ?? op.tipo}</td>
+                  <td className="px-4 py-3">
+                    {op.tipo === "despesa" && op.tambem_investimento
+                      ? "Despesa / Investimento"
+                      : tipoLabels[op.tipo] ?? op.tipo}
+                  </td>
                   <td className="px-4 py-3">
                     {op.tipo === "despesa" ? (
                       naoPaga ? (

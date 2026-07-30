@@ -25,6 +25,15 @@ class CategoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Operacao)
 class OperacaoAdmin(admin.ModelAdmin):
-    list_display = ["obra", "categoria", "fornecedor", "valor", "quantidade", "tipo", "data"]
-    list_filter = ["tipo", "data"]
+    list_display = [
+        "obra",
+        "categoria",
+        "fornecedor",
+        "valor",
+        "quantidade",
+        "tipo",
+        "tambem_investimento",
+        "data",
+    ]
+    list_filter = ["tipo", "tambem_investimento", "data"]
     search_fields = ["obra__nome", "descricao"]

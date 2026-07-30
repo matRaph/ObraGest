@@ -17,6 +17,7 @@ export interface OperacaoFormData {
   data: string;
   descricao: string;
   pago: boolean;
+  tambem_investimento: boolean;
 }
 
 export function createEmptyOperacaoForm(): OperacaoFormData {
@@ -30,6 +31,7 @@ export function createEmptyOperacaoForm(): OperacaoFormData {
     data: new Date().toISOString().slice(0, 10),
     descricao: "",
     pago: true,
+    tambem_investimento: false,
   };
 }
 
@@ -48,6 +50,7 @@ export function operacaoToForm(operacao: Operacao): OperacaoFormData {
     data: operacao.data,
     descricao: operacao.descricao,
     pago: operacao.pago,
+    tambem_investimento: operacao.tambem_investimento,
   };
 }
 
@@ -109,7 +112,16 @@ export default function OperacaoForm({
       <div className="grid gap-3 md:grid-cols-2">
         <CategoriaSelect
           value={form.categoria}
-          onChange={(categoria) => onChange({ ...form, categoria, subcategoria: "" })}
+          onChange={(categoria) => {
+            const tipo = categorias.find((item) => item.id === categoria)?.tipo;
+            onChange({
+              ...form,
+              categoria,
+              subcategoria: "",
+              tambem_investimento:
+                tipo === "despesa" ? form.tambem_investimento : false,
+            });
+          }}
           categorias={categorias}
         />
         <SubcategoriaSelect
@@ -224,18 +236,34 @@ export default function OperacaoForm({
           />
         </div>
         {selectedCategoria?.tipo === "despesa" && (
-          <label className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-brand-gray md:col-span-2">
-            <input
-              type="checkbox"
-              checked={form.pago}
-              onChange={(event) => onChange({ ...form, pago: event.target.checked })}
-              className="h-4 w-4"
-            />
-            Despesa já paga
-            <span className="text-xs text-brand-gray-muted">
-              (se desmarcada, não entra no saldo nem nas despesas pagas)
-            </span>
-          </label>
+          <>
+            <label className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-brand-gray md:col-span-2">
+              <input
+                type="checkbox"
+                checked={form.pago}
+                onChange={(event) => onChange({ ...form, pago: event.target.checked })}
+                className="h-4 w-4"
+              />
+              Despesa já paga
+              <span className="text-xs text-brand-gray-muted">
+                (se desmarcada, não entra no saldo nem nas despesas pagas)
+              </span>
+            </label>
+            <label className="flex items-center gap-2 rounded border border-brand-blue-light bg-brand-blue-light/30 px-3 py-2 text-sm text-brand-gray md:col-span-2">
+              <input
+                type="checkbox"
+                checked={form.tambem_investimento}
+                onChange={(event) =>
+                  onChange({ ...form, tambem_investimento: event.target.checked })
+                }
+                className="h-4 w-4"
+              />
+              Lançar também como investimento
+              <span className="text-xs text-brand-gray-muted">
+                (quando paga, entra nos investimentos; no saldo conta apenas como despesa)
+              </span>
+            </label>
+          </>
         )}
       </div>
       <div className="mt-3 flex justify-end gap-2">

@@ -32,8 +32,71 @@ import { brandColors, chartColors } from "../constants/theme";
 import type { TipoOperacao } from "../types";
 
 const defaultRange = getCurrentMonthRange();
+const PIE_HEIGHT = 340;
+const PIE_CENTER_Y = PIE_HEIGHT / 2;
+const PIE_LABEL_MIN_Y = 18;
+const PIE_LABEL_MAX_Y = PIE_HEIGHT - 18;
+const RADIAN = Math.PI / 180;
 
 type PeriodoPreset = "desde_inicio" | "mes_atual" | "custom";
+type PieDatum = { key: string; name: string; value: number };
+type PieLabelPosition = {
+  key: string;
+  name: string;
+  percent: number;
+  side: "left" | "right";
+  targetY: number;
+  y: number;
+};
+
+function distributePieLabels(labels: PieLabelPosition[]) {
+  if (labels.length === 0) return;
+  labels.sort((a, b) => a.targetY - b.targetY);
+  const availableHeight = PIE_LABEL_MAX_Y - PIE_LABEL_MIN_Y;
+  const gap =
+    labels.length === 1 ? 0 : Math.min(22, availableHeight / (labels.length - 1));
+
+  labels.forEach((label, index) => {
+    const minimumY = index === 0 ? PIE_LABEL_MIN_Y : labels[index - 1].y + gap;
+    label.y = Math.max(label.targetY, minimumY);
+  });
+
+  if (labels[labels.length - 1].y > PIE_LABEL_MAX_Y) {
+    labels[labels.length - 1].y = PIE_LABEL_MAX_Y;
+    for (let index = labels.length - 2; index >= 0; index -= 1) {
+      labels[index].y = Math.min(labels[index].y, labels[index + 1].y - gap);
+    }
+  }
+}
+
+function buildPieLabelPositions(data: PieDatum[]) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const labels: PieLabelPosition[] = [];
+  let currentAngle = 90;
+
+  for (const item of data) {
+    const angle = total > 0 ? (item.value / total) * 360 : 0;
+    const midAngle = currentAngle - angle / 2;
+    const direction = Math.cos(-midAngle * RADIAN);
+    labels.push({
+      key: item.key,
+      name: item.name,
+      percent: total > 0 ? item.value / total : 0,
+      side: direction >= 0 ? "right" : "left",
+      targetY: PIE_CENTER_Y + 128 * Math.sin(-midAngle * RADIAN),
+      y: 0,
+    });
+    currentAngle -= angle;
+  }
+
+  distributePieLabels(labels.filter((label) => label.side === "left"));
+  distributePieLabels(labels.filter((label) => label.side === "right"));
+  return new Map(labels.map((label) => [label.key, label]));
+}
+
+function shortenPieLabel(name: string) {
+  return name.length > 18 ? `${name.slice(0, 17)}…` : name;
+}
 
 function presetButtonClass(active: boolean) {
   return active
@@ -105,8 +168,59 @@ export default function DashboardPage() {
   );
 
   const pieData = categoriasDoTipo
-    .map((c) => ({ name: c.nome, value: parseFloat(c.total) }))
+    .map((c) => ({
+      key: `${c.categoria_id}:${c.tipo}`,
+      name: c.nome,
+      value: parseFloat(c.total),
+    }))
     .filter((d) => d.value > 0);
+  const pieTotal = pieData.reduce((total, item) => total + item.value, 0);
+  const pieLabelPositions = buildPieLabelPositions(pieData);
+
+  function renderPieLabel(entry: {
+    cx?: number | string;
+    cy?: number | string;
+    midAngle?: number;
+    outerRadius?: number | string;
+    payload?: PieDatum;
+  }) {
+    const position = entry.payload
+      ? pieLabelPositions.get(entry.payload.key)
+      : undefined;
+    if (!position) return null;
+
+    const cx = Number(entry.cx);
+    const cy = Number(entry.cy);
+    const radius = Number(entry.outerRadius);
+    const midAngle = entry.midAngle ?? 0;
+    const direction = position.side === "right" ? 1 : -1;
+    const sectorX = cx + (radius + 3) * Math.cos(-midAngle * RADIAN);
+    const sectorY = cy + (radius + 3) * Math.sin(-midAngle * RADIAN);
+    const elbowX = cx + direction * (radius + 16);
+    const textX = cx + direction * (radius + 32);
+    const lineEndX = textX - direction * 4;
+
+    return (
+      <g aria-hidden>
+        <polyline
+          points={`${sectorX},${sectorY} ${elbowX},${position.y} ${lineEndX},${position.y}`}
+          fill="none"
+          stroke="currentColor"
+          className="text-brand-gray-muted"
+          strokeWidth={1}
+        />
+        <text
+          x={textX}
+          y={position.y}
+          dy="0.35em"
+          textAnchor={position.side === "right" ? "start" : "end"}
+          className="fill-brand-gray text-xs"
+        >
+          {shortenPieLabel(position.name)}: {(position.percent * 100).toFixed(0)}%
+        </text>
+      </g>
+    );
+  }
 
   function resetPeriodo() {
     if (obraSelecionada) {
@@ -294,28 +408,33 @@ export default function DashboardPage() {
                 Sem {tipoPluralLabels[tipoGrafico].toLowerCase()} no período.
               </p>
             ) : (
-              <div className="grid items-center gap-6 md:grid-cols-2">
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={100}
-                      label={(entry: { name?: string; percent?: number }) =>
-                        `${entry.name}: ${((entry.percent ?? 0) * 100).toFixed(0)}%`
-                      }
-                      labelLine={false}
-                    >
-                      {pieData.map((_, index) => (
-                        <Cell key={index} fill={chartColors[index % chartColors.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="grid items-center gap-6 xl:grid-cols-2">
+                <div className="overflow-x-auto">
+                  <div className="h-[340px] min-w-[520px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={78}
+                          label={renderPieLabel}
+                          labelLine={false}
+                        >
+                          {pieData.map((item, index) => (
+                            <Cell
+                              key={item.key}
+                              fill={chartColors[index % chartColors.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
 
                 <div className="space-y-3">
                   {categoriasDoTipo.map((cat, index) => (
@@ -328,7 +447,14 @@ export default function DashboardPage() {
                           />
                           {cat.nome}
                         </span>
-                        <span className="font-medium">{formatCurrency(cat.total)}</span>
+                        <span className="font-medium">
+                          {formatCurrency(cat.total)}
+                          {pieTotal > 0 && (
+                            <span className="ml-1 text-xs font-normal text-brand-gray-muted">
+                              ({((parseFloat(cat.total) / pieTotal) * 100).toFixed(0)}%)
+                            </span>
+                          )}
+                        </span>
                       </div>
                       {cat.subcategorias.length > 1 ||
                       (cat.subcategorias.length === 1 &&
