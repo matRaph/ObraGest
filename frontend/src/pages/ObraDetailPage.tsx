@@ -21,6 +21,8 @@ import OperacaoForm, {
 import { formatQuantidade, parseCurrencyToNumber } from "../utils/currency";
 import type { Categoria, Fornecedor, Operacao, TipoOperacao } from "../types";
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+
 const tipoValorClasses: Record<TipoOperacao, string> = {
   receita: "text-brand-green",
   despesa: "text-red-600",
@@ -79,6 +81,8 @@ export default function ObraDetailPage() {
   const [filtroDescricao, setFiltroDescricao] = useState("");
   const [descricaoDebounced, setDescricaoDebounced] = useState("");
   const [filtroPago, setFiltroPago] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
   const [exportando, setExportando] = useState(false);
 
   const { data: obra, isLoading } = useQuery({
@@ -99,7 +103,7 @@ export default function ObraDetailPage() {
   });
   const fornecedores: Fornecedor[] = fornecedoresData?.results ?? [];
 
-  const listParams = useMemo(() => {
+  const filterParams = useMemo(() => {
     const params: Record<string, string> = {};
     if (filtroTipo) params.tipo = filtroTipo;
     if (filtroCategoria) params.categoria = filtroCategoria;
@@ -116,6 +120,15 @@ export default function ObraDetailPage() {
     descricaoDebounced,
     filtroPago,
   ]);
+
+  const listParams = useMemo(
+    () => ({
+      ...filterParams,
+      page: String(page),
+      page_size: String(pageSize),
+    }),
+    [filterParams, page, pageSize]
+  );
 
   const { data: operacoes } = useQuery({
     queryKey: ["operacoes", id, listParams],
@@ -141,11 +154,21 @@ export default function ObraDetailPage() {
   }, [filtroDescricao]);
 
   useEffect(() => {
+    setPage(1);
+  }, [filterParams, pageSize]);
+
+  useEffect(() => {
     const dialog = editDialogRef.current;
     if (!dialog) return;
     if (editingOperacao && !dialog.open) dialog.showModal();
     if (!editingOperacao && dialog.open) dialog.close();
   }, [editingOperacao]);
+
+  useEffect(() => {
+    if (!operacoes) return;
+    const totalPages = Math.max(1, Math.ceil(operacoes.count / pageSize));
+    if (page > totalPages) setPage(totalPages);
+  }, [operacoes, page, pageSize]);
 
   const filtroCategoriaObj = categorias.find((c) => c.id === filtroCategoria);
 
@@ -168,7 +191,7 @@ export default function ObraDetailPage() {
     try {
       // Busca todas as operações (com filtros ativos, sem paginação)
       const todasOperacoes = await operacoesApi.listByObra(id, {
-        ...listParams,
+        ...filterParams,
         page_size: "10000",
       });
       exportarObra(obra, todasOperacoes.results);
@@ -240,6 +263,10 @@ export default function ObraDetailPage() {
   if (!obra) return <p className="text-red-500">Obra não encontrada.</p>;
 
   const temPendentes = parseFloat(obra.total_despesas_pendentes) > 0;
+  const totalOperacoes = operacoes?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalOperacoes / pageSize));
+  const rangeStart = totalOperacoes === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, totalOperacoes);
 
   return (
     <div>
@@ -355,7 +382,16 @@ export default function ObraDetailPage() {
       </div>
 
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-brand-gray">Operações</h3>
+        <div className="flex items-baseline gap-2">
+          <h3 className="text-lg font-semibold text-brand-gray">Operações</h3>
+          {operacoes && (
+            <span className="text-sm text-brand-gray-muted">
+              {totalOperacoes === 1
+                ? "1 operação"
+                : `${totalOperacoes} operações`}
+            </span>
+          )}
+        </div>
         <button
           onClick={() => {
             if (showForm) {
@@ -644,6 +680,56 @@ export default function ObraDetailPage() {
           </tbody>
         </table>
       </div>
+
+      {operacoes && totalOperacoes > 0 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-brand-gray-muted">
+          <div className="flex flex-wrap items-center gap-3">
+            <p>
+              Mostrando {rangeStart}–{rangeEnd} de {totalOperacoes}
+            </p>
+            <label className="flex items-center gap-2">
+              <span>Por página</span>
+              <select
+                value={pageSize}
+                onChange={(e) =>
+                  setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])
+                }
+                className="rounded border px-2 py-1.5 text-brand-gray"
+                aria-label="Quantidade por página"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="rounded border px-3 py-1.5 text-brand-gray hover:bg-brand-gray-light disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Anterior
+              </button>
+              <span className="tabular-nums">
+                Página {page} de {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="rounded border px-3 py-1.5 text-brand-gray hover:bg-brand-gray-light disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Próxima
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <dialog
         ref={editDialogRef}
