@@ -376,6 +376,16 @@ export default function DashboardPage() {
               <p className="text-2xl font-bold text-brand-gray">
                 {formatCurrency(data?.total_investimentos ?? "0")}
               </p>
+              {parseFloat(data?.total_devolucoes_investimento ?? "0") > 0 && (
+                <p className="mt-1 text-xs font-medium text-brand-blue">
+                  {formatCurrency(data?.total_devolucoes_investimento ?? "0")} em devoluções
+                </p>
+              )}
+              {parseFloat(data?.total_devolucoes_pendentes ?? "0") > 0 && (
+                <p className="mt-1 text-xs font-medium text-amber-600">
+                  + {formatCurrency(data?.total_devolucoes_pendentes ?? "0")} pendentes
+                </p>
+              )}
             </div>
             <div className="rounded-lg border bg-white p-4 shadow-sm">
               <p className="text-sm text-brand-gray-muted">Saldo</p>

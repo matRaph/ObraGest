@@ -14,6 +14,8 @@ export interface Obra {
   total_despesas: string;
   total_despesas_pendentes: string;
   total_investimentos: string;
+  total_devolucoes_investimento: string;
+  total_devolucoes_pendentes: string;
   saldo: string;
   data_primeira_operacao: string | null;
 }
@@ -25,6 +27,7 @@ export interface Subcategoria {
   parent: string;
   padrao: boolean;
   ativa: boolean;
+  devolucao_investimento: boolean;
 }
 
 export interface Categoria {
@@ -34,6 +37,7 @@ export interface Categoria {
   parent: string | null;
   padrao: boolean;
   ativa: boolean;
+  devolucao_investimento: boolean;
   subcategorias: Subcategoria[];
 }
 
@@ -58,6 +62,7 @@ export interface Operacao {
   tipo: TipoOperacao;
   pago: boolean;
   tambem_investimento: boolean;
+  devolucao_investimento: boolean;
   descricao: string;
   criado_em: string;
 }
@@ -67,6 +72,8 @@ export interface DashboardData {
   total_despesas: string;
   total_despesas_pendentes: string;
   total_investimentos: string;
+  total_devolucoes_investimento: string;
+  total_devolucoes_pendentes: string;
   saldo: string;
   por_obra: Array<{
     obra_id: string;

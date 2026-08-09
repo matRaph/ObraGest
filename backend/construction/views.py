@@ -80,7 +80,7 @@ class ObraViewSet(viewsets.ModelViewSet):
     queryset = Obra.objects.all()
 
     def get_queryset(self):
-        qs = Obra.objects.prefetch_related("operacoes").annotate(
+        qs = Obra.objects.prefetch_related("operacoes__categoria").annotate(
             _receitas=Coalesce(
                 Sum(
                     "operacoes__valor",
@@ -92,7 +92,11 @@ class ObraViewSet(viewsets.ModelViewSet):
             _despesas_pagas=Coalesce(
                 Sum(
                     "operacoes__valor",
-                    filter=Q(operacoes__tipo=TipoOperacao.DESPESA, operacoes__pago=True),
+                    filter=Q(
+                        operacoes__tipo=TipoOperacao.DESPESA,
+                        operacoes__pago=True,
+                        operacoes__categoria__devolucao_investimento=False,
+                    ),
                 ),
                 Value(Decimal("0")),
                 output_field=DecimalField(),
@@ -158,14 +162,24 @@ class ObraViewSet(viewsets.ModelViewSet):
 
             if tipo == TipoOperacao.INVESTIMENTO:
                 qs = qs.filter(
-                    Q(tipo=TipoOperacao.INVESTIMENTO)
-                    | Q(
-                        tipo=TipoOperacao.DESPESA,
-                        tambem_investimento=True,
-                        pago=True,
-                    )
+                    tipo=TipoOperacao.INVESTIMENTO,
+                    categoria__devolucao_investimento=False,
                 )
-            elif tipo:
+            elif tipo == "despesa_investimento":
+                qs = qs.filter(
+                    tipo=TipoOperacao.DESPESA,
+                    tambem_investimento=True,
+                    categoria__devolucao_investimento=False,
+                )
+            elif tipo == TipoOperacao.DESPESA:
+                qs = qs.filter(
+                    tipo=TipoOperacao.DESPESA,
+                    tambem_investimento=False,
+                    categoria__devolucao_investimento=False,
+                )
+            elif tipo == "devolucao":
+                qs = qs.filter(categoria__devolucao_investimento=True)
+            elif tipo == TipoOperacao.RECEITA:
                 qs = qs.filter(tipo=tipo)
             if categoria:
                 qs = qs.filter(categoria_id=categoria)
@@ -182,8 +196,13 @@ class ObraViewSet(viewsets.ModelViewSet):
             if data_fim:
                 qs = qs.filter(data__lte=data_fim)
 
-            allowed = {"data": "data", "-data": "-data", "valor": "valor", "-valor": "-valor"}
-            qs = qs.order_by(allowed.get(ordering, "-data"))
+            allowed = {
+                "data": ("data", "criado_em"),
+                "-data": ("-data", "-criado_em"),
+                "valor": ("valor", "-data", "-criado_em"),
+                "-valor": ("-valor", "-data", "-criado_em"),
+            }
+            qs = qs.order_by(*allowed.get(ordering, ("-data", "-criado_em")))
 
             page = self.paginate_queryset(qs)
             serializer = OperacaoSerializer(page or qs, many=True)
@@ -227,6 +246,8 @@ class DashboardView(APIView):
         total_despesas = Decimal("0")
         total_despesas_pendentes = Decimal("0")
         total_investimentos = Decimal("0")
+        total_devolucoes_investimento = Decimal("0")
+        total_devolucoes_pendentes = Decimal("0")
         por_obra: dict = {}
         por_cidade: dict = {}
         por_categoria: dict = {}
@@ -266,6 +287,12 @@ class DashboardView(APIView):
             entry["_subs"][sub_key]["total"] += op.valor
 
         for op in operacoes:
+            if op.contabiliza_como_devolucao_investimento:
+                total_devolucoes_investimento += op.valor
+                if not op.pago:
+                    total_devolucoes_pendentes += op.valor
+                continue
+
             delta = _delta(op)
             if op.tipo == TipoOperacao.RECEITA:
                 total_receitas += op.valor
@@ -337,6 +364,8 @@ class DashboardView(APIView):
                 "total_despesas": total_despesas,
                 "total_despesas_pendentes": total_despesas_pendentes,
                 "total_investimentos": total_investimentos,
+                "total_devolucoes_investimento": total_devolucoes_investimento,
+                "total_devolucoes_pendentes": total_devolucoes_pendentes,
                 "saldo": total_receitas - total_despesas,
                 "por_obra": list(por_obra.values()),
                 "por_cidade": list(por_cidade.values()),

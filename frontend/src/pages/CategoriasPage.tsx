@@ -22,6 +22,7 @@ export default function CategoriasPage() {
   const queryClient = useQueryClient();
   const [novoNome, setNovoNome] = useState("");
   const [novoTipo, setNovoTipo] = useState<TipoOperacao>("despesa");
+  const [novaDevolucao, setNovaDevolucao] = useState(false);
   const [subInputs, setSubInputs] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<{ id: string; nome: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,9 +66,15 @@ export default function CategoriasPage() {
   }
 
   const createCategoria = useMutation({
-    mutationFn: () => categoriasApi.create({ nome: novoNome.trim(), tipo: novoTipo }),
+    mutationFn: () =>
+      categoriasApi.create({
+        nome: novoNome.trim(),
+        tipo: novoTipo,
+        devolucao_investimento: novoTipo === "despesa" && novaDevolucao,
+      }),
     onSuccess: () => {
       setNovoNome("");
+      setNovaDevolucao(false);
       setError(null);
       invalidate();
     },
@@ -92,6 +99,22 @@ export default function CategoriasPage() {
       setEditing(null);
       setError(null);
       invalidate();
+    },
+    onError: handleError,
+  });
+
+  const toggleDevolucao = useMutation({
+    mutationFn: (categoria: Categoria) =>
+      categoriasApi.update(categoria.id, {
+        devolucao_investimento: !categoria.devolucao_investimento,
+      }),
+    onSuccess: () => {
+      setError(null);
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["obras"] });
+      queryClient.invalidateQueries({ queryKey: ["obra"] });
+      queryClient.invalidateQueries({ queryKey: ["operacoes"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: handleError,
   });
@@ -145,8 +168,30 @@ export default function CategoriasPage() {
                     padrão
                   </span>
                 )}
+                {cat.devolucao_investimento && (
+                  <span className="rounded bg-brand-blue-light px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-brand-blue">
+                    devolução
+                  </span>
+                )}
               </div>
               <div className="flex gap-2">
+                {cat.tipo === "despesa" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          `${cat.devolucao_investimento ? "Desmarcar" : "Marcar"} "${cat.nome}" como devolução? Os totais das operações existentes serão recalculados.`
+                        )
+                      ) {
+                        toggleDevolucao.mutate(cat);
+                      }
+                    }}
+                    className="text-xs text-brand-blue hover:text-brand-blue-dark"
+                  >
+                    {cat.devolucao_investimento ? "Desmarcar devolução" : "Marcar devolução"}
+                  </button>
+                )}
                 <button
                   onClick={() => setEditing({ id: cat.id, nome: cat.nome })}
                   className="text-xs text-brand-gray-muted hover:text-brand-gray"
@@ -256,7 +301,11 @@ export default function CategoriasPage() {
             <select
               id="cat-tipo"
               value={novoTipo}
-              onChange={(e) => setNovoTipo(e.target.value as TipoOperacao)}
+              onChange={(e) => {
+                const tipo = e.target.value as TipoOperacao;
+                setNovoTipo(tipo);
+                if (tipo !== "despesa") setNovaDevolucao(false);
+              }}
               className="w-full rounded border px-3 py-2"
             >
               {TIPOS.map((t) => (
@@ -276,6 +325,22 @@ export default function CategoriasPage() {
             </button>
           </div>
         </div>
+        {novoTipo === "despesa" && (
+          <label className="mt-3 flex items-start gap-2 text-sm text-brand-gray">
+            <input
+              type="checkbox"
+              checked={novaDevolucao}
+              onChange={(e) => setNovaDevolucao(e.target.checked)}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              Devolução de investimento
+              <span className="block text-xs text-brand-gray-muted">
+                Operações desta categoria ficam fora de despesas, investimentos e saldo.
+              </span>
+            </span>
+          </label>
+        )}
       </form>
 
       {error && (

@@ -64,6 +64,14 @@ export function exportarObra(obra: Obra, operacoes: Operacao[]): void {
   rows.push(["Despesas pagas", formatValorCsv(obra.total_despesas)]);
   rows.push(["Despesas não pagas", formatValorCsv(obra.total_despesas_pendentes)]);
   rows.push(["Investimentos", formatValorCsv(obra.total_investimentos)]);
+  rows.push([
+    "Devoluções de investimento",
+    formatValorCsv(obra.total_devolucoes_investimento),
+  ]);
+  rows.push([
+    "Devoluções pendentes",
+    formatValorCsv(obra.total_devolucoes_pendentes),
+  ]);
   rows.push(["Saldo", formatValorCsv(obra.saldo)]);
   rows.push([]);
 
@@ -74,7 +82,9 @@ export function exportarObra(obra: Obra, operacoes: Operacao[]): void {
   for (const op of operacoes) {
     rows.push([
       formatDataBr(op.data),
-      op.tipo === "despesa" && op.tambem_investimento
+      op.devolucao_investimento
+        ? "Devolução de investimento"
+        : op.tipo === "despesa" && op.tambem_investimento
         ? "Despesa / Investimento"
         : tipoLabels[op.tipo] ?? op.tipo,
       op.categoria_nome,
@@ -117,6 +127,14 @@ export function exportarDashboard(
   rows.push(["Despesas pagas", formatValorCsv(data.total_despesas)]);
   rows.push(["Despesas não pagas", formatValorCsv(data.total_despesas_pendentes)]);
   rows.push(["Investimentos", formatValorCsv(data.total_investimentos)]);
+  rows.push([
+    "Devoluções de investimento",
+    formatValorCsv(data.total_devolucoes_investimento),
+  ]);
+  rows.push([
+    "Devoluções pendentes",
+    formatValorCsv(data.total_devolucoes_pendentes),
+  ]);
   rows.push(["Saldo", formatValorCsv(data.saldo)]);
   rows.push([]);
 

@@ -45,7 +45,10 @@ function buildOperacaoPayload(
   unidadeHabilitada: boolean,
   categorias: Categoria[]
 ) {
-  const selectedTipo = categorias.find((categoria) => categoria.id === form.categoria)?.tipo;
+  const selectedCategoria = categorias.find(
+    (categoria) => categoria.id === form.categoria
+  );
+  const selectedTipo = selectedCategoria?.tipo;
   const payload: Record<string, unknown> = {
     categoria: form.categoria,
     subcategoria: form.subcategoria || null,
@@ -57,7 +60,9 @@ function buildOperacaoPayload(
   };
   if (selectedTipo === "despesa") payload.pago = form.pago;
   payload.tambem_investimento =
-    selectedTipo === "despesa" && form.tambem_investimento;
+    selectedTipo === "despesa" &&
+    !selectedCategoria?.devolucao_investimento &&
+    form.tambem_investimento;
   return payload;
 }
 
@@ -263,6 +268,10 @@ export default function ObraDetailPage() {
   if (!obra) return <p className="text-red-500">Obra não encontrada.</p>;
 
   const temPendentes = parseFloat(obra.total_despesas_pendentes) > 0;
+  const temDevolucoes =
+    parseFloat(obra.total_devolucoes_investimento) > 0;
+  const temDevolucoesPendentes =
+    parseFloat(obra.total_devolucoes_pendentes) > 0;
   const totalOperacoes = operacoes?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalOperacoes / pageSize));
   const rangeStart = totalOperacoes === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -370,6 +379,16 @@ export default function ObraDetailPage() {
                 <p className="text-lg font-semibold text-brand-gray">
                   {formatCurrency(obra.total_investimentos)}
                 </p>
+                {temDevolucoes && (
+                  <p className="mt-1 text-xs font-medium text-brand-blue">
+                    {formatCurrency(obra.total_devolucoes_investimento)} em devoluções
+                  </p>
+                )}
+                {temDevolucoesPendentes && (
+                  <p className="mt-1 text-xs font-medium text-amber-600">
+                    + {formatCurrency(obra.total_devolucoes_pendentes)} pendentes
+                  </p>
+                )}
               </div>
               <div className="rounded bg-brand-gray-light p-3">
                 <p className="text-xs text-brand-gray">Saldo</p>
@@ -433,8 +452,10 @@ export default function ObraDetailPage() {
         >
           <option value="">Todos os tipos</option>
           <option value="despesa">Despesas</option>
+          <option value="despesa_investimento">Despesa / Investimento</option>
           <option value="receita">Receitas</option>
           <option value="investimento">Investimentos</option>
+          <option value="devolucao">Devoluções</option>
         </select>
         <select
           value={filtroCategoria}
@@ -447,10 +468,22 @@ export default function ObraDetailPage() {
           <option value="">Todas as categorias</option>
           {categorias
             .filter(
-              (c) =>
-                !filtroTipo ||
-                c.tipo === filtroTipo ||
-                (filtroTipo === "investimento" && c.tipo === "despesa")
+              (c) => {
+                if (!filtroTipo) return true;
+                if (filtroTipo === "devolucao") {
+                  return c.devolucao_investimento;
+                }
+                if (filtroTipo === "despesa") {
+                  return c.tipo === "despesa" && !c.devolucao_investimento;
+                }
+                if (filtroTipo === "despesa_investimento") {
+                  return c.tipo === "despesa" && !c.devolucao_investimento;
+                }
+                if (filtroTipo === "investimento") {
+                  return c.tipo === "investimento";
+                }
+                return c.tipo === filtroTipo;
+              }
             )
             .map((c) => (
               <option key={c.id} value={c.id}>
@@ -458,6 +491,11 @@ export default function ObraDetailPage() {
               </option>
             ))}
         </select>
+        {filtroTipo === "despesa_investimento" && (
+          <p className="self-center text-xs text-brand-gray-muted">
+            Inclui lançamentos híbridos pagos e pendentes.
+          </p>
+        )}
         <select
           value={filtroSubcategoria}
           onChange={(e) => setFiltroSubcategoria(e.target.value)}
@@ -541,6 +579,7 @@ export default function ObraDetailPage() {
           <tbody>
             {operacoes?.results.map((op) => {
               const naoPaga = op.tipo === "despesa" && !op.pago;
+              const devolucao = op.devolucao_investimento;
               const precoUnitario =
                 op.quantidade && parseNum(op.quantidade) > 0
                   ? calcPrecoUnitario(op.valor, op.quantidade)
@@ -560,15 +599,23 @@ export default function ObraDetailPage() {
                   <td className="px-4 py-3">{op.fornecedor_nome || "—"}</td>
                   <td className="px-4 py-3">{op.descricao || "—"}</td>
                   <td className="px-4 py-3">
-                    {op.tipo === "despesa" && op.tambem_investimento
-                      ? "Despesa / Investimento"
-                      : tipoLabels[op.tipo] ?? op.tipo}
+                    {devolucao ? (
+                      <span className="inline-flex rounded-full bg-brand-blue-light px-2 py-0.5 text-xs font-semibold text-brand-blue">
+                        Devolução
+                      </span>
+                    ) : op.tipo === "despesa" && op.tambem_investimento ? (
+                      <span className="inline-flex rounded-full bg-brand-gray-light px-2 py-0.5 text-xs font-semibold text-brand-gray">
+                        Despesa / Investimento
+                      </span>
+                    ) : (
+                      tipoLabels[op.tipo] ?? op.tipo
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {op.tipo === "despesa" ? (
                       naoPaga ? (
                         <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                          ● Não paga
+                          ● {devolucao ? "Devolução pendente" : "Não paga"}
                         </span>
                       ) : (
                         <span className="whitespace-nowrap text-xs text-brand-gray-muted">Paga</span>
@@ -578,12 +625,18 @@ export default function ObraDetailPage() {
                     )}
                   </td>
                   <td
-                    className={`px-4 py-3 text-right font-medium ${tipoValorClasses[op.tipo]} ${
+                    className={`px-4 py-3 text-right font-medium ${
+                      devolucao ? "text-brand-gray" : tipoValorClasses[op.tipo]
+                    } ${
                       naoPaga ? "opacity-70" : ""
                     }`}
                   >
                     <div>
-                      {op.tipo === "receita" ? "+" : op.tipo === "despesa" ? "−" : ""}
+                      {op.tipo === "receita"
+                        ? "+"
+                        : op.tipo === "despesa" && !devolucao
+                          ? "−"
+                          : ""}
                       {formatCurrency(op.valor)}
                     </div>
                     {op.quantidade && (

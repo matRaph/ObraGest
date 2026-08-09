@@ -113,13 +113,16 @@ export default function OperacaoForm({
         <CategoriaSelect
           value={form.categoria}
           onChange={(categoria) => {
-            const tipo = categorias.find((item) => item.id === categoria)?.tipo;
+            const selecionada = categorias.find((item) => item.id === categoria);
             onChange({
               ...form,
               categoria,
               subcategoria: "",
               tambem_investimento:
-                tipo === "despesa" ? form.tambem_investimento : false,
+                selecionada?.tipo === "despesa" &&
+                !selecionada.devolucao_investimento
+                  ? form.tambem_investimento
+                  : false,
             });
           }}
           categorias={categorias}
@@ -244,25 +247,36 @@ export default function OperacaoForm({
                 onChange={(event) => onChange({ ...form, pago: event.target.checked })}
                 className="h-4 w-4"
               />
-              Despesa já paga
+              {selectedCategoria.devolucao_investimento
+                ? "Devolução já paga"
+                : "Despesa já paga"}
               <span className="text-xs text-brand-gray-muted">
-                (se desmarcada, não entra no saldo nem nas despesas pagas)
+                {selectedCategoria.devolucao_investimento
+                  ? "(se desmarcada, aparece como devolução pendente)"
+                  : "(se desmarcada, não entra no saldo nem nas despesas pagas)"}
               </span>
             </label>
-            <label className="flex items-center gap-2 rounded border border-brand-blue-light bg-brand-blue-light/30 px-3 py-2 text-sm text-brand-gray md:col-span-2">
-              <input
-                type="checkbox"
-                checked={form.tambem_investimento}
-                onChange={(event) =>
-                  onChange({ ...form, tambem_investimento: event.target.checked })
-                }
-                className="h-4 w-4"
-              />
-              Lançar também como investimento
-              <span className="text-xs text-brand-gray-muted">
-                (quando paga, entra nos investimentos; no saldo conta apenas como despesa)
-              </span>
-            </label>
+            {selectedCategoria.devolucao_investimento ? (
+              <p className="rounded border border-brand-blue-light bg-brand-blue-light/30 px-3 py-2 text-xs text-brand-gray-muted md:col-span-2">
+                Devoluções são totalizadas separadamente e não alteram despesas,
+                investimentos ou saldo.
+              </p>
+            ) : (
+              <label className="flex items-center gap-2 rounded border border-brand-blue-light bg-brand-blue-light/30 px-3 py-2 text-sm text-brand-gray md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.tambem_investimento}
+                  onChange={(event) =>
+                    onChange({ ...form, tambem_investimento: event.target.checked })
+                  }
+                  className="h-4 w-4"
+                />
+                Lançar também como investimento
+                <span className="text-xs text-brand-gray-muted">
+                  (quando paga, entra nos investimentos; no saldo conta apenas como despesa)
+                </span>
+              </label>
+            )}
           </>
         )}
       </div>

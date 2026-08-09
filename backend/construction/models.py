@@ -65,6 +65,7 @@ class Categoria(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     nome = models.CharField(max_length=100)
     tipo = models.CharField(max_length=12, choices=TipoOperacao.choices)
+    devolucao_investimento = models.BooleanField(default=False)
     parent = models.ForeignKey(
         "self",
         on_delete=models.CASCADE,
@@ -89,11 +90,22 @@ class Categoria(models.Model):
                 condition=Q(parent__isnull=False, ativa=True),
                 name="unique_categoria_sub_ativa",
             ),
+            models.CheckConstraint(
+                condition=Q(devolucao_investimento=False)
+                | Q(parent__isnull=True, tipo=TipoOperacao.DESPESA),
+                name="devolucao_apenas_despesa_top",
+            ),
         ]
 
     @property
     def is_subcategoria(self) -> bool:
         return self.parent_id is not None
+
+    @property
+    def contabiliza_como_devolucao_investimento(self) -> bool:
+        if self.parent_id:
+            return self.parent.devolucao_investimento
+        return self.devolucao_investimento
 
     def __str__(self) -> str:
         if self.parent_id:
@@ -145,11 +157,18 @@ class Operacao(models.Model):
 
     @property
     def contabiliza_como_investimento(self) -> bool:
-        return self.tipo == TipoOperacao.INVESTIMENTO or (
-            self.tipo == TipoOperacao.DESPESA
-            and self.tambem_investimento
-            and self.pago
+        return not self.contabiliza_como_devolucao_investimento and (
+            self.tipo == TipoOperacao.INVESTIMENTO
+            or (
+                self.tipo == TipoOperacao.DESPESA
+                and self.tambem_investimento
+                and self.pago
+            )
         )
+
+    @property
+    def contabiliza_como_devolucao_investimento(self) -> bool:
+        return self.categoria.contabiliza_como_devolucao_investimento
 
     def __str__(self) -> str:
         return f"{self.obra.nome} - {self.valor}"

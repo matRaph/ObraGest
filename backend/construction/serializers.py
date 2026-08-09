@@ -25,10 +25,22 @@ class FornecedorSerializer(serializers.ModelSerializer):
 
 
 class SubcategoriaSerializer(serializers.ModelSerializer):
+    devolucao_investimento = serializers.BooleanField(
+        source="parent.devolucao_investimento", read_only=True
+    )
+
     class Meta:
         model = Categoria
-        fields = ["id", "nome", "tipo", "parent", "padrao", "ativa"]
-        read_only_fields = ["tipo", "padrao"]
+        fields = [
+            "id",
+            "nome",
+            "tipo",
+            "parent",
+            "padrao",
+            "ativa",
+            "devolucao_investimento",
+        ]
+        read_only_fields = ["tipo", "padrao", "devolucao_investimento"]
 
 
 class CategoriaSerializer(serializers.ModelSerializer):
@@ -37,7 +49,16 @@ class CategoriaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Categoria
-        fields = ["id", "nome", "tipo", "parent", "padrao", "ativa", "subcategorias"]
+        fields = [
+            "id",
+            "nome",
+            "tipo",
+            "parent",
+            "padrao",
+            "ativa",
+            "devolucao_investimento",
+            "subcategorias",
+        ]
         read_only_fields = ["padrao"]
         # As constraints de unicidade são condicionais (apenas categorias ativas),
         # então validamos manualmente em vez de usar o UniqueTogetherValidator do DRF.
@@ -48,9 +69,20 @@ class CategoriaSerializer(serializers.ModelSerializer):
         subs.sort(key=lambda s: s.nome)
         return SubcategoriaSerializer(subs, many=True).data
 
+    def to_representation(self, instance: Categoria) -> dict:
+        data = super().to_representation(instance)
+        data["devolucao_investimento"] = (
+            instance.contabiliza_como_devolucao_investimento
+        )
+        return data
+
     def validate(self, attrs):
         parent = attrs.get("parent", getattr(self.instance, "parent", None))
         nome = attrs.get("nome", getattr(self.instance, "nome", None))
+        devolucao_investimento = attrs.get(
+            "devolucao_investimento",
+            getattr(self.instance, "devolucao_investimento", False),
+        )
 
         if parent is not None:
             if parent.parent_id is not None:
@@ -59,11 +91,28 @@ class CategoriaSerializer(serializers.ModelSerializer):
                 )
             tipo = parent.tipo
             attrs["tipo"] = tipo
+            if devolucao_investimento:
+                raise serializers.ValidationError(
+                    {
+                        "devolucao_investimento": (
+                            "Marque a categoria principal; subcategorias herdam essa opção."
+                        )
+                    }
+                )
         else:
             tipo = attrs.get("tipo", getattr(self.instance, "tipo", None))
             if self.instance is None and not tipo:
                 raise serializers.ValidationError(
                     {"tipo": "Informe o tipo da categoria."}
+                )
+            if devolucao_investimento and tipo != TipoOperacao.DESPESA:
+                raise serializers.ValidationError(
+                    {
+                        "devolucao_investimento": (
+                            "Apenas categorias principais de despesa podem ser "
+                            "devolução de investimento."
+                        )
+                    }
                 )
 
         duplicadas = Categoria.objects.filter(
@@ -83,8 +132,15 @@ def _obra_totais(obra: Obra) -> dict:
     despesas_pagas = Decimal("0")
     despesas_pendentes = Decimal("0")
     investimentos = Decimal("0")
+    devolucoes_investimento = Decimal("0")
+    devolucoes_pendentes = Decimal("0")
 
     for op in obra.operacoes.all():
+        if op.contabiliza_como_devolucao_investimento:
+            devolucoes_investimento += op.valor
+            if not op.pago:
+                devolucoes_pendentes += op.valor
+            continue
         if op.tipo == TipoOperacao.RECEITA:
             receitas += op.valor
         elif op.tipo == TipoOperacao.DESPESA:
@@ -100,6 +156,8 @@ def _obra_totais(obra: Obra) -> dict:
         "total_despesas": despesas_pagas,
         "total_despesas_pendentes": despesas_pendentes,
         "total_investimentos": investimentos,
+        "total_devolucoes_investimento": devolucoes_investimento,
+        "total_devolucoes_pendentes": devolucoes_pendentes,
         "saldo": receitas - despesas_pagas,
     }
 
@@ -109,6 +167,8 @@ class _ObraTotaisMixin(serializers.ModelSerializer):
     total_despesas = serializers.SerializerMethodField()
     total_despesas_pendentes = serializers.SerializerMethodField()
     total_investimentos = serializers.SerializerMethodField()
+    total_devolucoes_investimento = serializers.SerializerMethodField()
+    total_devolucoes_pendentes = serializers.SerializerMethodField()
     saldo = serializers.SerializerMethodField()
     data_primeira_operacao = serializers.SerializerMethodField()
 
@@ -130,6 +190,12 @@ class _ObraTotaisMixin(serializers.ModelSerializer):
 
     def get_total_investimentos(self, obj: Obra) -> Decimal:
         return self._cached_totais(obj)["total_investimentos"]
+
+    def get_total_devolucoes_investimento(self, obj: Obra) -> Decimal:
+        return self._cached_totais(obj)["total_devolucoes_investimento"]
+
+    def get_total_devolucoes_pendentes(self, obj: Obra) -> Decimal:
+        return self._cached_totais(obj)["total_devolucoes_pendentes"]
 
     def get_saldo(self, obj: Obra) -> Decimal:
         return self._cached_totais(obj)["saldo"]
@@ -164,6 +230,8 @@ class ObraListSerializer(_ObraTotaisMixin):
             "total_despesas",
             "total_despesas_pendentes",
             "total_investimentos",
+            "total_devolucoes_investimento",
+            "total_devolucoes_pendentes",
             "saldo",
             "data_primeira_operacao",
         ]
@@ -190,6 +258,8 @@ class ObraDetailSerializer(_ObraTotaisMixin):
             "total_despesas",
             "total_despesas_pendentes",
             "total_investimentos",
+            "total_devolucoes_investimento",
+            "total_devolucoes_pendentes",
             "saldo",
             "data_primeira_operacao",
         ]
@@ -202,6 +272,9 @@ class OperacaoSerializer(serializers.ModelSerializer):
     )
     fornecedor_nome = serializers.CharField(
         source="fornecedor.nome", read_only=True, default=None
+    )
+    devolucao_investimento = serializers.BooleanField(
+        source="contabiliza_como_devolucao_investimento", read_only=True
     )
     descricao = serializers.CharField(
         max_length=DESCRICAO_MAX_LENGTH, required=False, allow_blank=True
@@ -224,6 +297,7 @@ class OperacaoSerializer(serializers.ModelSerializer):
             "tipo",
             "pago",
             "tambem_investimento",
+            "devolucao_investimento",
             "descricao",
             "criado_em",
         ]
@@ -262,12 +336,15 @@ class OperacaoSerializer(serializers.ModelSerializer):
                     {"subcategoria": "A subcategoria não pertence à categoria escolhida."}
                 )
         if tambem_investimento and (
-            categoria is None or categoria.tipo != TipoOperacao.DESPESA
+            categoria is None
+            or categoria.tipo != TipoOperacao.DESPESA
+            or categoria.contabiliza_como_devolucao_investimento
         ):
             raise serializers.ValidationError(
                 {
                     "tambem_investimento": (
-                        "Apenas despesas podem ser lançadas também como investimento."
+                        "Apenas despesas que não sejam devolução podem ser lançadas "
+                        "também como investimento."
                     )
                 }
             )

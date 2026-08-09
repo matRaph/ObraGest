@@ -19,8 +19,8 @@ class FornecedorAdmin(admin.ModelAdmin):
 
 @admin.register(Categoria)
 class CategoriaAdmin(admin.ModelAdmin):
-    list_display = ["nome", "tipo", "padrao", "ativa"]
-    list_filter = ["tipo", "padrao", "ativa"]
+    list_display = ["nome", "tipo", "devolucao_investimento", "padrao", "ativa"]
+    list_filter = ["tipo", "devolucao_investimento", "padrao", "ativa"]
 
 
 @admin.register(Operacao)

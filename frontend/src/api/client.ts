@@ -41,6 +41,7 @@ export interface CategoriaInput {
   nome: string;
   tipo?: string;
   parent?: string | null;
+  devolucao_investimento?: boolean;
 }
 
 export const categoriasApi = {
