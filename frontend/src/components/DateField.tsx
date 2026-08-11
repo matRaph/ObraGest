@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type MouseEvent } from "react";
 import {
   padSegments,
   parseIsoDate,
@@ -127,14 +127,25 @@ export default function DateField({
 
   const borderClass = isInvalid ? "border-red-400" : "border-brand-gray-border";
 
+  function handleContainerClick(e: MouseEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).tagName !== "INPUT") {
+      try {
+        pickerRef.current?.showPicker();
+      } catch {
+        pickerRef.current?.click();
+      }
+    }
+  }
+
   return (
     <div
       data-date-field
-      className={`inline-flex w-full items-center gap-1 rounded border bg-white px-2 py-1.5 ${borderClass} ${className}`}
+      className={`inline-flex w-full cursor-pointer items-center gap-1 rounded border bg-white px-2 py-1.5 ${borderClass} ${className}`}
       onFocus={() => {
         editingRef.current = true;
       }}
       onBlur={handleBlur}
+      onClick={handleContainerClick}
     >
       <input
         ref={dayRef}

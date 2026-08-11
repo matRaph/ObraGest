@@ -1,4 +1,5 @@
-from decimal import Decimal
+from datetime import date, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 import logging
 import zipfile
 
@@ -213,6 +214,151 @@ class ObraViewSet(viewsets.ModelViewSet):
         serializer = OperacaoSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(obra=obra)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="operacoes/lote")
+    def operacoes_lote(self, request, pk=None):
+        obra = self.get_object()
+
+        itens = request.data.get("itens")
+        if not itens or not isinstance(itens, list) or len(itens) == 0:
+            return Response(
+                {"itens": "Informe ao menos um item."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        categoria_id = request.data.get("categoria")
+        subcategoria_id = request.data.get("subcategoria") or None
+        fornecedor_id = request.data.get("fornecedor") or None
+        num_parcelas = request.data.get("num_parcelas")
+        data_primeira_str = request.data.get("data_primeira_parcela")
+        tambem_investimento = bool(request.data.get("tambem_investimento", False))
+        descricao_payload = str(request.data.get("descricao", "")).strip()
+
+        # Validações básicas
+        if not categoria_id:
+            return Response(
+                {"categoria": "Informe a categoria da nota."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not data_primeira_str:
+            return Response(
+                {"data_primeira_parcela": "Informe a data da primeira parcela."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            num_parcelas = int(num_parcelas)
+            if num_parcelas < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response(
+                {"num_parcelas": "Número de parcelas deve ser inteiro maior que zero."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            categoria = Categoria.objects.get(pk=categoria_id)
+        except Categoria.DoesNotExist:
+            return Response(
+                {"categoria": "Categoria não encontrada."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not categoria.ativa:
+            return Response(
+                {"categoria": "Categoria inativa."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if categoria.parent_id is not None:
+            return Response(
+                {"categoria": "Selecione uma categoria principal, não uma subcategoria."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        subcategoria = None
+        if subcategoria_id:
+            try:
+                subcategoria = Categoria.objects.get(pk=subcategoria_id)
+            except Categoria.DoesNotExist:
+                return Response(
+                    {"subcategoria": "Subcategoria não encontrada."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if subcategoria.parent_id != categoria.id:
+                return Response(
+                    {"subcategoria": "A subcategoria não pertence à categoria escolhida."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        fornecedor = None
+        if fornecedor_id:
+            try:
+                fornecedor = Fornecedor.objects.get(pk=fornecedor_id)
+            except Fornecedor.DoesNotExist:
+                return Response(
+                    {"fornecedor": "Fornecedor não encontrado."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not fornecedor.ativa:
+                return Response(
+                    {"fornecedor": "Fornecedor inativo."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        try:
+            data_primeira = date.fromisoformat(data_primeira_str)
+        except ValueError:
+            return Response(
+                {"data_primeira_parcela": "Data inválida. Use o formato AAAA-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Calcular total dos itens
+        try:
+            total = sum(Decimal(str(item.get("valor", "0"))) for item in itens)
+        except Exception:
+            return Response(
+                {"itens": "Valores dos itens inválidos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if total <= 0:
+            return Response(
+                {"itens": "O valor total dos itens deve ser maior que zero."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Calcular valor de cada parcela com arredondamento
+        centavo = Decimal("0.01")
+        valor_parcela = (total / num_parcelas).quantize(centavo, rounding=ROUND_HALF_UP)
+        # Última parcela absorve a diferença de arredondamento
+        valor_ultima = total - valor_parcela * (num_parcelas - 1)
+
+        criadas = []
+        for i in range(num_parcelas):
+            data_parcela = data_primeira + timedelta(days=30 * i)
+            valor = valor_ultima if i == num_parcelas - 1 else valor_parcela
+            op = Operacao(
+                obra=obra,
+                categoria=categoria,
+                subcategoria=subcategoria,
+                fornecedor=fornecedor,
+                valor=valor,
+                data=data_parcela,
+                pago=False,
+                tambem_investimento=(
+                    tambem_investimento
+                    and categoria.tipo == TipoOperacao.DESPESA
+                    and not categoria.contabiliza_como_devolucao_investimento
+                ),
+                descricao=descricao_payload,
+                itens=itens,
+                parcela_num=i + 1,
+                parcela_total=num_parcelas,
+            )
+            op.save()
+            criadas.append(op)
+
+        serializer = OperacaoSerializer(criadas, many=True)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 

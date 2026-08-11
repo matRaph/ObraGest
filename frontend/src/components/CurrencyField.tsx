@@ -28,7 +28,7 @@ export default function CurrencyField({
 
   return (
     <div>
-      <FieldLabel htmlFor={id} label={label} />
+      <FieldLabel htmlFor={id} label={label} required={required} />
       <div className="relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-brand-gray-muted">
           R$

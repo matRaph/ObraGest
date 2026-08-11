@@ -47,6 +47,28 @@ export interface Fornecedor {
   ativa: boolean;
 }
 
+export interface OperacaoItem {
+  categoria: string;
+  categoria_nome?: string;
+  subcategoria?: string;
+  subcategoria_nome?: string;
+  valor: string;
+  quantidade?: string;
+  precoUnitario?: string;
+  descricao?: string;
+}
+
+export interface OperacaoLotePayload {
+  itens: OperacaoItem[];
+  categoria: string;
+  subcategoria?: string;
+  fornecedor?: string;
+  num_parcelas: number;
+  data_primeira_parcela: string;
+  tambem_investimento?: boolean;
+  descricao?: string;
+}
+
 export interface Operacao {
   id: string;
   obra: string;
@@ -64,6 +86,9 @@ export interface Operacao {
   tambem_investimento: boolean;
   devolucao_investimento: boolean;
   descricao: string;
+  itens?: OperacaoItem[] | null;
+  parcela_num?: number | null;
+  parcela_total?: number | null;
   criado_em: string;
 }
 

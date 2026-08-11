@@ -299,6 +299,9 @@ class OperacaoSerializer(serializers.ModelSerializer):
             "tambem_investimento",
             "devolucao_investimento",
             "descricao",
+            "itens",
+            "parcela_num",
+            "parcela_total",
             "criado_em",
         ]
         read_only_fields = ["tipo", "obra"]

@@ -142,6 +142,9 @@ class Operacao(models.Model):
     pago = models.BooleanField(default=True)
     tambem_investimento = models.BooleanField(default=False)
     descricao = models.TextField(blank=True, max_length=DESCRICAO_MAX_LENGTH)
+    itens = models.JSONField(null=True, blank=True)
+    parcela_num = models.PositiveSmallIntegerField(null=True, blank=True)
+    parcela_total = models.PositiveSmallIntegerField(null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:

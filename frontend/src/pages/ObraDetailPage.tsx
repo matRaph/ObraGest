@@ -18,8 +18,13 @@ import OperacaoForm, {
   operacaoToForm,
   type OperacaoFormData,
 } from "../components/OperacaoForm";
+import AgregadoPanel, {
+  createEmptyNotaForm,
+  type AgregadoNotaForm,
+} from "../components/AgregadoPanel";
+import OperacaoItensModal from "../components/OperacaoItensModal";
 import { formatQuantidade, parseCurrencyToNumber } from "../utils/currency";
-import type { Categoria, Fornecedor, Operacao, TipoOperacao } from "../types";
+import type { Categoria, Fornecedor, Operacao, OperacaoItem, TipoOperacao } from "../types";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
@@ -78,6 +83,10 @@ export default function ObraDetailPage() {
   const [editForm, setEditForm] = useState<OperacaoFormData>(createEmptyOperacaoForm);
   const [editUnidadeHabilitada, setEditUnidadeHabilitada] = useState(false);
   const editDialogRef = useRef<HTMLDialogElement>(null);
+
+  const [agregadoItens, setAgregadoItens] = useState<OperacaoItem[]>([]);
+  const [notaForm, setNotaForm] = useState<AgregadoNotaForm>(createEmptyNotaForm);
+  const [itensModalOperacao, setItensModalOperacao] = useState<Operacao | null>(null);
 
   const [filtroTipo, setFiltroTipo] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
@@ -190,6 +199,26 @@ export default function ObraDetailPage() {
     setShowForm(false);
   }
 
+  function handleAdicionarAoAgregado() {
+    const valorNum = parseCurrencyToNumber(form.valor);
+    if (!form.categoria || valorNum <= 0) return;
+    const categoriaObj = categorias.find((c) => c.id === form.categoria);
+    const subcategoriaObj = categoriaObj?.subcategorias.find((s) => s.id === form.subcategoria);
+    const item: OperacaoItem = {
+      categoria: form.categoria,
+      categoria_nome: categoriaObj?.nome,
+      subcategoria: form.subcategoria || undefined,
+      subcategoria_nome: subcategoriaObj?.nome,
+      valor: valorNum.toFixed(2),
+      quantidade: unidadeHabilitada && form.quantidade ? form.quantidade : undefined,
+      precoUnitario: unidadeHabilitada && form.precoUnitario ? form.precoUnitario : undefined,
+      descricao: form.descricao || undefined,
+    };
+    setAgregadoItens((prev) => [...prev, item]);
+    setForm({ ...createEmptyOperacaoForm(), categoria: form.categoria });
+    setUnidadeHabilitada(false);
+  }
+
   async function handleExportar() {
     if (!obra || !id) return;
     setExportando(true);
@@ -262,6 +291,28 @@ export default function ObraDetailPage() {
   const deleteMutation = useMutation({
     mutationFn: (opId: string) => operacoesApi.delete(opId),
     onSuccess: invalidateAll,
+  });
+
+  const createLoteMutation = useMutation({
+    mutationFn: () =>
+      operacoesApi.createLote(id!, {
+        itens: agregadoItens,
+        categoria: notaForm.categoria,
+        subcategoria: notaForm.subcategoria || undefined,
+        fornecedor: notaForm.fornecedor || undefined,
+        num_parcelas: notaForm.num_parcelas,
+        data_primeira_parcela: notaForm.data_primeira_parcela,
+        tambem_investimento: notaForm.tambem_investimento,
+        descricao: notaForm.descricao || undefined,
+      }),
+    onSuccess: () => {
+      invalidateAll();
+      setAgregadoItens([]);
+      setNotaForm(createEmptyNotaForm());
+      setForm(createEmptyOperacaoForm());
+      setUnidadeHabilitada(false);
+      setShowForm(false);
+    },
   });
 
   if (isLoading) return <p className="text-brand-gray-muted">Carregando...</p>;
@@ -425,6 +476,24 @@ export default function ObraDetailPage() {
         </button>
       </div>
 
+      {agregadoItens.length > 0 && (
+        <AgregadoPanel
+          itens={agregadoItens}
+          onRemoverItem={(idx) =>
+            setAgregadoItens((prev) => prev.filter((_, i) => i !== idx))
+          }
+          onLimpar={() => {
+            setAgregadoItens([]);
+            setNotaForm(createEmptyNotaForm());
+          }}
+          notaForm={notaForm}
+          onNotaFormChange={setNotaForm}
+          categorias={categorias}
+          fornecedores={fornecedores}
+          onLancar={() => createLoteMutation.mutate()}
+          isPending={createLoteMutation.isPending}
+        />
+      )}
       {showForm && (
         <OperacaoForm
           form={form}
@@ -434,6 +503,8 @@ export default function ObraDetailPage() {
           unidadeHabilitada={unidadeHabilitada}
           onUnidadeHabilitadaChange={setUnidadeHabilitada}
           onSubmit={() => createMutation.mutate()}
+          onAdicionarAoAgregado={handleAdicionarAoAgregado}
+          ocultarFornecedor={agregadoItens.length > 0}
           isPending={createMutation.isPending}
           submitLabel="Salvar operação"
           className="mb-4 rounded-lg border bg-white p-4 shadow-sm"
@@ -597,7 +668,14 @@ export default function ObraDetailPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">{op.fornecedor_nome || "—"}</td>
-                  <td className="px-4 py-3">{op.descricao || "—"}</td>
+                  <td className="px-4 py-3">
+                    {op.parcela_num && op.parcela_total && (
+                      <span className="mr-1.5 inline-flex items-center rounded-full bg-brand-blue-light px-2 py-0.5 text-xs font-semibold text-brand-blue">
+                        Parcela {op.parcela_num}/{op.parcela_total}
+                      </span>
+                    )}
+                    {op.descricao || (!op.parcela_num && "—")}
+                  </td>
                   <td className="px-4 py-3">
                     {devolucao ? (
                       <span className="inline-flex rounded-full bg-brand-blue-light px-2 py-0.5 text-xs font-semibold text-brand-blue">
@@ -665,6 +743,34 @@ export default function ObraDetailPage() {
                           }`}
                         >
                           {naoPaga ? "Pagar" : "Não paga"}
+                        </button>
+                      )}
+                      {op.itens && op.itens.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setItensModalOperacao(op)}
+                          title="Ver itens da nota"
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-brand-gray-border text-brand-gray-muted hover:bg-brand-gray-light"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-3.5 w-3.5"
+                            aria-hidden
+                          >
+                            <line x1="8" y1="6" x2="21" y2="6" />
+                            <line x1="8" y1="12" x2="21" y2="12" />
+                            <line x1="8" y1="18" x2="21" y2="18" />
+                            <line x1="3" y1="6" x2="3.01" y2="6" />
+                            <line x1="3" y1="12" x2="3.01" y2="12" />
+                            <line x1="3" y1="18" x2="3.01" y2="18" />
+                          </svg>
+                          <span className="sr-only">Ver itens</span>
                         </button>
                       )}
                       <button
@@ -814,6 +920,13 @@ export default function ObraDetailPage() {
           )}
         </div>
       </dialog>
+
+      {itensModalOperacao && (
+        <OperacaoItensModal
+          operacao={itensModalOperacao}
+          onClose={() => setItensModalOperacao(null)}
+        />
+      )}
     </div>
   );
 }

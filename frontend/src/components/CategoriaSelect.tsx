@@ -38,7 +38,7 @@ export default function CategoriaSelect({
 }: CategoriaSelectProps) {
   return (
     <div>
-      <FieldLabel htmlFor={id} label={label} />
+      <FieldLabel htmlFor={id} label={label} required={required} />
       <select
         id={id}
         required={required}
