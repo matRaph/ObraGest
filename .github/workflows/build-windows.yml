@@ -77,30 +77,50 @@ jobs:
         shell: pwsh
         run: |
           if ([string]::IsNullOrWhiteSpace($env:GOOGLE_CLIENT_SECRET_JSON)) {
-            Write-Warning @"
-          Secret GOOGLE_CLIENT_SECRET_JSON missing — Google Drive will be unavailable in this build.
-          Add the full OAuth client JSON as that repository secret, then re-tag to embed it.
+            Write-Error @"
+          Secret GOOGLE_CLIENT_SECRET_JSON is required.
+          Paste the full Google Cloud OAuth client JSON into that repository secret
+          so it is embedded in ObraGest.exe (clients do not configure it).
           "@
-            exit 0
+            exit 1
           }
+
+          $outPath = Join-Path (Get-Location) "google_client_secret.json"
           # utf8NoBOM avoids a BOM that breaks google-auth JSON parsing
           $utf8 = New-Object System.Text.UTF8Encoding $false
-          [IO.File]::WriteAllText(
-            (Join-Path (Get-Location) "google_client_secret.json"),
-            $env:GOOGLE_CLIENT_SECRET_JSON,
-            $utf8
-          )
-          Write-Host "Wrote google_client_secret.json for bundling."
+          [IO.File]::WriteAllText($outPath, $env:GOOGLE_CLIENT_SECRET_JSON, $utf8)
+
+          try {
+            $parsed = Get-Content -Raw $outPath | ConvertFrom-Json
+          } catch {
+            Write-Error "GOOGLE_CLIENT_SECRET_JSON is not valid JSON: $($_.Exception.Message)"
+            exit 1
+          }
+
+          $section = $null
+          if ($parsed.PSObject.Properties.Name -contains "web") { $section = $parsed.web }
+          elseif ($parsed.PSObject.Properties.Name -contains "installed") { $section = $parsed.installed }
+
+          if (-not $section -or [string]::IsNullOrWhiteSpace([string]$section.client_id) -or
+              [string]::IsNullOrWhiteSpace([string]$section.client_secret)) {
+            Write-Error @"
+          GOOGLE_CLIENT_SECRET_JSON must be a full OAuth client JSON with web/installed,
+          client_id and client_secret (not only the secret string).
+          "@
+            exit 1
+          }
+
+          Write-Host "Wrote google_client_secret.json for bundling (client_id=$($section.client_id))."
 
       - name: Build executable with PyInstaller
         working-directory: backend
         shell: pwsh
         run: |
-          if (Test-Path "google_client_secret.json") {
-            Write-Host "Bundling google_client_secret.json into ObraGest.exe"
-          } else {
-            Write-Warning "google_client_secret.json absent — build will ship without embedded Google OAuth"
+          if (!(Test-Path "google_client_secret.json")) {
+            Write-Error "google_client_secret.json missing before PyInstaller"
+            exit 1
           }
+          Write-Host "Bundling google_client_secret.json into ObraGest.exe"
           pyinstaller launcher.spec --clean --noconfirm
           if (!(Test-Path "dist/ObraGest.exe")) {
             Write-Error "dist/ObraGest.exe not found"
@@ -108,6 +128,35 @@ jobs:
           }
           Move-Item -Force "dist/ObraGest.exe" "dist/ObraGest_${{ github.ref_name }}.exe"
           Write-Host "Created dist/ObraGest_${{ github.ref_name }}.exe"
+
+      - name: Verify Google OAuth is embedded in executable
+        working-directory: backend
+        shell: pwsh
+        run: |
+          $exe = "dist/ObraGest_${{ github.ref_name }}.exe"
+          if (!(Test-Path $exe)) {
+            Write-Error "Executable not found: $exe"
+            exit 1
+          }
+          python -c @"
+          from pathlib import Path
+          from PyInstaller.archive.readers import CArchiveReader
+
+          exe = Path(r'$exe')
+          archive = CArchiveReader(str(exe))
+          toc = archive.toc
+          if isinstance(toc, dict):
+              names = list(toc.keys())
+          else:
+              names = [entry[0] if isinstance(entry, (tuple, list)) else str(entry) for entry in toc]
+          matches = [n for n in names if str(n).replace('\\', '/').endswith('google_client_secret.json')]
+          if not matches:
+              raise SystemExit(
+                  'google_client_secret.json not found inside ' + exe.name
+                  + ' — refusing to publish a build without Google Drive OAuth'
+              )
+          print('Embedded OAuth OK:', matches[0])
+          "@
 
       - name: Sign executable (Authenticode)
         working-directory: backend

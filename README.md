@@ -93,7 +93,7 @@ npm run dev
 1. No [Google Cloud Console](https://console.cloud.google.com/), crie credenciais OAuth 2.0 (tipo **Aplicativo da Web**).
 2. Adicione a URI de redirecionamento: `http://localhost:8080/google/callback/`
 3. Ative a **Google Drive API** no projeto.
-4. Salve o JSON de credenciais em `backend/google_client_secret.json` (montado automaticamente no Docker).
+4. Salve o JSON de credenciais em `backend/google_client_secret.json` (lido via `GOOGLE_OAUTH_CLIENT_SECRETS` no Docker).
 5. Em **Configurações**, clique em **Conectar Google Drive** e autorize a conta.
 
 ### Executável Windows (clientes)
@@ -134,11 +134,11 @@ No repositório: **Settings → Secrets and variables → Actions**:
 
 | Secret | Obrigatório | Conteúdo |
 |--------|-------------|----------|
-| `GOOGLE_CLIENT_SECRET_JSON` | Recomendado | Conteúdo completo do JSON OAuth do Google Cloud (client secret) |
+| `GOOGLE_CLIENT_SECRET_JSON` | **Sim** | Conteúdo completo do JSON OAuth do Google Cloud (`web`/`installed` + `client_id` + `client_secret`) |
 | `WINDOWS_CERT_BASE64` | Não | Arquivo `.pfx` em Base64 |
 | `WINDOWS_CERT_PASSWORD` | Não | Senha do PFX |
 
-Sem `GOOGLE_CLIENT_SECRET_JSON`, o release publica o `.exe`, mas o Google Drive fica indisponível até você configurar o secret e gerar um novo build.
+Sem `GOOGLE_CLIENT_SECRET_JSON` válido, a pipeline **falha** e não publica o release. Rotacionar a key no Google Cloud exige atualizar esse secret e gerar uma **nova tag** — o `.exe` já instalado no cliente não muda sozinho.
 
 No Google Cloud Console, nas credenciais OAuth (tipo **Aplicativo da Web**), inclua a URI:
 
