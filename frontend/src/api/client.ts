@@ -6,6 +6,7 @@ import type {
   GoogleDriveStatus,
   Obra,
   Operacao,
+  OperacaoItem,
   OperacaoLotePayload,
   PaginatedResponse,
 } from "../types";
@@ -39,6 +40,10 @@ export const operacoesApi = {
       .then((r) => r.data),
   update: (id: string, data: Partial<Operacao>) =>
     api.patch<Operacao>(`/operacoes/${id}/`, data).then((r) => r.data),
+  atualizarItens: (id: string, itens: OperacaoItem[]) =>
+    api
+      .post<Operacao[]>(`/operacoes/${id}/atualizar-itens/`, { itens })
+      .then((r) => r.data),
   delete: (id: string) => api.delete(`/operacoes/${id}/`),
 };
 

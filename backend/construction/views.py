@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import logging
+import uuid
 import zipfile
 
 from django.db.models import (
@@ -333,6 +334,7 @@ class ObraViewSet(viewsets.ModelViewSet):
         # Última parcela absorve a diferença de arredondamento
         valor_ultima = total - valor_parcela * (num_parcelas - 1)
 
+        grupo_parcela = uuid.uuid4()
         criadas = []
         for i in range(num_parcelas):
             data_parcela = data_primeira + timedelta(days=30 * i)
@@ -354,6 +356,7 @@ class ObraViewSet(viewsets.ModelViewSet):
                 itens=itens,
                 parcela_num=i + 1,
                 parcela_total=num_parcelas,
+                grupo_parcela=grupo_parcela,
             )
             op.save()
             criadas.append(op)
@@ -372,6 +375,66 @@ class OperacaoViewSet(viewsets.ModelViewSet):
         if obra_id:
             qs = qs.filter(obra_id=obra_id)
         return qs
+
+    def _parcelas_do_grupo(self, operacao: Operacao):
+        if operacao.grupo_parcela:
+            return list(
+                Operacao.objects.filter(grupo_parcela=operacao.grupo_parcela).order_by(
+                    "parcela_num", "data", "id"
+                )
+            )
+        # Fallback para notas antigas sem grupo_parcela
+        if not operacao.parcela_total or not operacao.itens:
+            return [operacao]
+        qs = Operacao.objects.filter(
+            obra_id=operacao.obra_id,
+            parcela_total=operacao.parcela_total,
+            categoria_id=operacao.categoria_id,
+            fornecedor_id=operacao.fornecedor_id,
+            descricao=operacao.descricao,
+            itens=operacao.itens,
+        ).order_by("parcela_num", "data", "id")
+        return list(qs) if qs.exists() else [operacao]
+
+    @action(detail=True, methods=["post"], url_path="atualizar-itens")
+    def atualizar_itens(self, request, pk=None):
+        operacao = self.get_object()
+        itens = request.data.get("itens")
+        if not itens or not isinstance(itens, list) or len(itens) == 0:
+            return Response(
+                {"itens": "Informe ao menos um item."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            total = sum(Decimal(str(item.get("valor", "0"))) for item in itens)
+        except Exception:
+            return Response(
+                {"itens": "Valores dos itens inválidos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if total <= 0:
+            return Response(
+                {"itens": "O valor total dos itens deve ser maior que zero."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        parcelas = self._parcelas_do_grupo(operacao)
+        num_parcelas = len(parcelas)
+        centavo = Decimal("0.01")
+        valor_parcela = (total / num_parcelas).quantize(centavo, rounding=ROUND_HALF_UP)
+        valor_ultima = total - valor_parcela * (num_parcelas - 1)
+
+        atualizadas = []
+        for i, op in enumerate(parcelas):
+            op.itens = itens
+            op.valor = valor_ultima if i == num_parcelas - 1 else valor_parcela
+            op.save(update_fields=["itens", "valor"])
+            atualizadas.append(op)
+
+        serializer = OperacaoSerializer(atualizadas, many=True)
+        return Response(serializer.data)
 
 
 class DashboardView(APIView):

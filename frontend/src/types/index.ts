@@ -89,6 +89,7 @@ export interface Operacao {
   itens?: OperacaoItem[] | null;
   parcela_num?: number | null;
   parcela_total?: number | null;
+  grupo_parcela?: string | null;
   criado_em: string;
 }
 

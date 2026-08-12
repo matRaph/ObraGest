@@ -79,7 +79,26 @@ export function exportarObra(obra: Obra, operacoes: Operacao[]): void {
   rows.push(["OPERAÇÕES"]);
   rows.push(["Data", "Tipo", "Categoria", "Subcategoria", "Fornecedor", "Descrição", "Situação", "Qtd.", "Valor (R$)"]);
 
+  let totalReceitas = 0;
+  let totalDespesas = 0;
+  let totalInvestimentos = 0;
+  let totalDevolucoes = 0;
+
   for (const op of operacoes) {
+    const valor = parseCurrencyToNumber(op.valor);
+    if (op.devolucao_investimento) {
+      totalDevolucoes += valor;
+    } else if (op.tipo === "receita") {
+      totalReceitas += valor;
+    } else if (op.tipo === "investimento") {
+      totalInvestimentos += valor;
+    } else if (op.tipo === "despesa") {
+      totalDespesas += valor;
+      if (op.tambem_investimento) {
+        totalInvestimentos += valor;
+      }
+    }
+
     rows.push([
       formatDataBr(op.data),
       op.devolucao_investimento
@@ -96,6 +115,23 @@ export function exportarObra(obra: Obra, operacoes: Operacao[]): void {
       formatValorCsv(op.valor),
     ]);
   }
+
+  rows.push([]);
+  rows.push(["TOTAIS DA LISTAGEM", "", "", "", "", "", "", "", ""]);
+  rows.push(["Total receitas", "", "", "", "", "", "", "", formatValorCsv(totalReceitas)]);
+  rows.push(["Total despesas", "", "", "", "", "", "", "", formatValorCsv(totalDespesas)]);
+  rows.push(["Total investimentos", "", "", "", "", "", "", "", formatValorCsv(totalInvestimentos)]);
+  rows.push([
+    "Total devoluções de investimento",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    formatValorCsv(totalDevolucoes),
+  ]);
 
   const nomeSanitizado = obra.nome.replace(/[^a-zA-Z0-9À-ú\s]/g, "").trim();
   const data = new Date().toISOString().slice(0, 10);

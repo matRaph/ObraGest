@@ -28,6 +28,19 @@ import type { Categoria, Fornecedor, Operacao, OperacaoItem, TipoOperacao } from
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
+/** Compara data ISO (YYYY-MM-DD) com o calendário local. */
+function getAlertaVencimento(dataIso: string): "vencida" | "vence_amanha" | null {
+  const agora = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const hoje = `${agora.getFullYear()}-${pad(agora.getMonth() + 1)}-${pad(agora.getDate())}`;
+  const amanhaDate = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + 1);
+  const amanha = `${amanhaDate.getFullYear()}-${pad(amanhaDate.getMonth() + 1)}-${pad(amanhaDate.getDate())}`;
+  const data = dataIso.slice(0, 10);
+  if (data < hoje) return "vencida";
+  if (data === amanha) return "vence_amanha";
+  return null;
+}
+
 const tipoValorClasses: Record<TipoOperacao, string> = {
   receita: "text-brand-green",
   despesa: "text-red-600",
@@ -650,15 +663,24 @@ export default function ObraDetailPage() {
           <tbody>
             {operacoes?.results.map((op) => {
               const naoPaga = op.tipo === "despesa" && !op.pago;
+              const alertaVencimento = naoPaga ? getAlertaVencimento(op.data) : null;
               const devolucao = op.devolucao_investimento;
               const precoUnitario =
                 op.quantidade && parseNum(op.quantidade) > 0
                   ? calcPrecoUnitario(op.valor, op.quantidade)
                   : "";
+              const rowBg =
+                alertaVencimento === "vencida"
+                  ? "bg-red-50"
+                  : alertaVencimento === "vence_amanha"
+                    ? "bg-orange-50"
+                    : naoPaga
+                      ? "bg-amber-50"
+                      : "";
               return (
                 <tr
                   key={op.id}
-                  className={`border-t ${naoPaga ? "bg-amber-50" : ""}`}
+                  className={`border-t ${rowBg}`}
                 >
                   <td className="px-4 py-3">{formatDate(op.data)}</td>
                   <td className="px-4 py-3">
@@ -692,9 +714,19 @@ export default function ObraDetailPage() {
                   <td className="px-4 py-3">
                     {op.tipo === "despesa" ? (
                       naoPaga ? (
-                        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                          ● {devolucao ? "Devolução pendente" : "Não paga"}
-                        </span>
+                        alertaVencimento === "vencida" ? (
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                            ● {devolucao ? "Devolução vencida" : "Vencida"}
+                          </span>
+                        ) : alertaVencimento === "vence_amanha" ? (
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                            ● {devolucao ? "Devolução vence amanhã" : "Vence amanhã"}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                            ● {devolucao ? "Devolução pendente" : "Não paga"}
+                          </span>
+                        )
                       ) : (
                         <span className="whitespace-nowrap text-xs text-brand-gray-muted">Paga</span>
                       )
@@ -925,6 +957,7 @@ export default function ObraDetailPage() {
         <OperacaoItensModal
           operacao={itensModalOperacao}
           onClose={() => setItensModalOperacao(null)}
+          onSaved={invalidateAll}
         />
       )}
     </div>

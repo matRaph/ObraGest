@@ -302,9 +302,10 @@ class OperacaoSerializer(serializers.ModelSerializer):
             "itens",
             "parcela_num",
             "parcela_total",
+            "grupo_parcela",
             "criado_em",
         ]
-        read_only_fields = ["tipo", "obra"]
+        read_only_fields = ["tipo", "obra", "grupo_parcela"]
 
     def validate_categoria(self, categoria: Categoria) -> Categoria:
         if not categoria.ativa:
