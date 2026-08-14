@@ -8,11 +8,13 @@ export function getTodayIso() {
 
 export function getCurrentMonthRange() {
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const lastDay = new Date(y, m + 1, 0).getDate();
   return {
-    inicio: start.toISOString().slice(0, 10),
-    fim: end.toISOString().slice(0, 10),
+    inicio: `${y}-${pad(m + 1)}-01`,
+    fim: `${y}-${pad(m + 1)}-${pad(lastDay)}`,
   };
 }
 

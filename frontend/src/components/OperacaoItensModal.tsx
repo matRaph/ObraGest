@@ -180,7 +180,12 @@ export default function OperacaoItensModal({
               Itens da nota — {operacao.descricao || "Operação agregada"}
             </h3>
             <p className="mt-0.5 text-sm text-brand-gray-muted">
-              {formatDate(operacao.data)} · {operacao.categoria_nome}
+              Vencimento: {formatDate(operacao.data)}
+              {operacao.data_compra && (
+                <span> · Compra: {formatDate(operacao.data_compra)}</span>
+              )}
+              {" · "}
+              {operacao.categoria_nome}
               {operacao.subcategoria_nome && (
                 <span> › {operacao.subcategoria_nome}</span>
               )}
@@ -405,8 +410,14 @@ export default function OperacaoItensModal({
             <strong>
               parcela {operacao.parcela_num} de {operacao.parcela_total}
             </strong>{" "}
-            no valor de <strong>{formatCurrency(operacao.valor)}</strong>. O valor total da
-            nota foi dividido em {operacao.parcela_total} parcelas iguais.
+            no valor de <strong>{formatCurrency(operacao.valor)}</strong>
+            {operacao.data_compra && (
+              <>
+                . Data da compra: <strong>{formatDate(operacao.data_compra)}</strong>
+              </>
+            )}
+            . O valor total da nota foi dividido em {operacao.parcela_total} parcelas
+            iguais.
             {editing && (
               <span className="mt-1 block text-brand-gray">
                 Ao salvar, o total será redistribuído entre as {numParcelas} parcelas.

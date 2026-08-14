@@ -1,6 +1,7 @@
 import type { DashboardData, Obra, Operacao } from "../types";
 import { statusLabels, tipoLabels } from "../api/client";
 import { formatQuantidade, parseCurrencyToNumber } from "./currency";
+import { getTodayIso } from "./dates";
 
 // Gera e faz download de um arquivo CSV com BOM UTF-8 (compatível com Excel pt-BR)
 function downloadCsv(filename: string, rows: string[][]): void {
@@ -134,7 +135,7 @@ export function exportarObra(obra: Obra, operacoes: Operacao[]): void {
   ]);
 
   const nomeSanitizado = obra.nome.replace(/[^a-zA-Z0-9À-ú\s]/g, "").trim();
-  const data = new Date().toISOString().slice(0, 10);
+  const data = getTodayIso();
   downloadCsv(`ObraGest - ${nomeSanitizado} - ${data}.csv`, rows);
 }
 
@@ -222,6 +223,6 @@ export function exportarDashboard(
   const nomeParte = params.obraNome
     ? ` - ${params.obraNome.replace(/[^a-zA-Z0-9À-ú\s]/g, "").trim()}`
     : "";
-  const dataArquivo = new Date().toISOString().slice(0, 10);
+  const dataArquivo = getTodayIso();
   downloadCsv(`ObraGest - Dashboard${nomeParte} - ${dataArquivo}.csv`, rows);
 }

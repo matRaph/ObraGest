@@ -6,6 +6,7 @@ import zipfile
 
 from django.db.models import (
     Case,
+    DateField,
     DecimalField,
     F,
     IntegerField,
@@ -160,7 +161,7 @@ class ObraViewSet(viewsets.ModelViewSet):
             pago = request.query_params.get("pago")
             data_inicio = request.query_params.get("data_inicio")
             data_fim = request.query_params.get("data_fim")
-            ordering = request.query_params.get("ordering", "-data")
+            ordering = request.query_params.get("ordering", "prioridade")
 
             if tipo == TipoOperacao.INVESTIMENTO:
                 qs = qs.filter(
@@ -198,13 +199,54 @@ class ObraViewSet(viewsets.ModelViewSet):
             if data_fim:
                 qs = qs.filter(data__lte=data_fim)
 
+            hoje = date.today()
+            amanha = hoje + timedelta(days=1)
+            qs = qs.annotate(
+                _prioridade=Case(
+                    When(
+                        Q(parcela_num__isnull=False)
+                        & Q(tipo=TipoOperacao.DESPESA)
+                        & Q(pago=False)
+                        & Q(data__lt=hoje),
+                        then=Value(0),
+                    ),
+                    When(
+                        Q(parcela_num__isnull=False)
+                        & Q(tipo=TipoOperacao.DESPESA)
+                        & Q(pago=False)
+                        & Q(data__lte=amanha)
+                        & Q(data__gte=hoje),
+                        then=Value(1),
+                    ),
+                    default=Value(2),
+                    output_field=IntegerField(),
+                )
+            )
+
             allowed = {
+                "prioridade": ("_prioridade", "-criado_em"),
                 "data": ("data", "criado_em"),
                 "-data": ("-data", "-criado_em"),
                 "valor": ("valor", "-data", "-criado_em"),
                 "-valor": ("-valor", "-data", "-criado_em"),
+                "-criado_em": ("-criado_em",),
             }
-            qs = qs.order_by(*allowed.get(ordering, ("-data", "-criado_em")))
+            if ordering == "prioridade":
+                # Vencidas / a vencer: data de vencimento crescente.
+                # Demais: empata na data sentinela e ordena por criado_em desc.
+                qs = qs.order_by(
+                    "_prioridade",
+                    Case(
+                        When(_prioridade__lt=2, then=F("data")),
+                        default=Value(date(9999, 12, 31)),
+                        output_field=DateField(),
+                    ),
+                    F("criado_em").desc(),
+                )
+            else:
+                qs = qs.order_by(
+                    *allowed.get(ordering, ("_prioridade", "-criado_em"))
+                )
 
             page = self.paginate_queryset(qs)
             serializer = OperacaoSerializer(page or qs, many=True)

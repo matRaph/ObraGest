@@ -5,6 +5,7 @@ import FieldLabel from "./FieldLabel";
 import FornecedorSelect from "./FornecedorSelect";
 import { formatCurrency } from "../api/client";
 import { parseCurrencyToNumber } from "../utils/currency";
+import { getTodayIso } from "../utils/dates";
 import type { Categoria, Fornecedor, OperacaoItem } from "../types";
 
 export interface AgregadoNotaForm {
@@ -22,7 +23,7 @@ export function createEmptyNotaForm(): AgregadoNotaForm {
     categoria: "",
     subcategoria: "",
     fornecedor: "",
-    data_primeira_parcela: new Date().toISOString().slice(0, 10),
+    data_primeira_parcela: getTodayIso(),
     num_parcelas: 1,
     tambem_investimento: false,
     descricao: "",
@@ -161,6 +162,7 @@ export default function AgregadoPanel({
           disabled={!selectedCategoria}
         />
         <FornecedorSelect
+          id="nota-fornecedor"
           value={notaForm.fornecedor}
           onChange={(fornecedor) => onNotaFormChange({ ...notaForm, fornecedor })}
           fornecedores={fornecedores}

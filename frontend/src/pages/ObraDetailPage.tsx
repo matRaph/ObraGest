@@ -28,8 +28,8 @@ import type { Categoria, Fornecedor, Operacao, OperacaoItem, TipoOperacao } from
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
-/** Compara data ISO (YYYY-MM-DD) com o calendário local. */
-function getAlertaVencimento(dataIso: string): "vencida" | "vence_amanha" | null {
+/** Compara data ISO (YYYY-MM-DD) com o calendário local. Só para parcelas. */
+function getAlertaVencimento(dataIso: string): "vencida" | "vence_hoje" | "vence_amanha" | null {
   const agora = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   const hoje = `${agora.getFullYear()}-${pad(agora.getMonth() + 1)}-${pad(agora.getDate())}`;
@@ -37,6 +37,7 @@ function getAlertaVencimento(dataIso: string): "vencida" | "vence_amanha" | null
   const amanha = `${amanhaDate.getFullYear()}-${pad(amanhaDate.getMonth() + 1)}-${pad(amanhaDate.getDate())}`;
   const data = dataIso.slice(0, 10);
   if (data < hoje) return "vencida";
+  if (data === hoje) return "vence_hoje";
   if (data === amanha) return "vence_amanha";
   return null;
 }
@@ -111,6 +112,7 @@ export default function ObraDetailPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
   const [exportando, setExportando] = useState(false);
+  const [sucessoMsg, setSucessoMsg] = useState<string | null>(null);
 
   const { data: obra, isLoading } = useQuery({
     queryKey: ["obra", id],
@@ -187,8 +189,22 @@ export default function ObraDetailPage() {
   useEffect(() => {
     const dialog = editDialogRef.current;
     if (!dialog) return;
-    if (editingOperacao && !dialog.open) dialog.showModal();
-    if (!editingOperacao && dialog.open) dialog.close();
+    if (editingOperacao && !dialog.open) {
+      dialog.showModal();
+      // Evita o foco automático no 1º input (que abria o select de categoria)
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && dialog.contains(active)) {
+        active.blur();
+      }
+      document.body.style.overflow = "hidden";
+    }
+    if (!editingOperacao && dialog.open) {
+      dialog.close();
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [editingOperacao]);
 
   useEffect(() => {
@@ -278,6 +294,8 @@ export default function ObraDetailPage() {
         fornecedor: form.fornecedor,
       });
       setUnidadeHabilitada(false);
+      setSucessoMsg("Operação lançada com sucesso.");
+      window.setTimeout(() => setSucessoMsg(null), 4000);
     },
   });
 
@@ -325,6 +343,8 @@ export default function ObraDetailPage() {
       setForm(createEmptyOperacaoForm());
       setUnidadeHabilitada(false);
       setShowForm(false);
+      setSucessoMsg("Nota parcelada lançada com sucesso.");
+      window.setTimeout(() => setSucessoMsg(null), 4000);
     },
   });
 
@@ -346,6 +366,12 @@ export default function ObraDetailPage() {
       <Link to="/" className="mb-4 inline-block text-sm text-brand-blue hover:underline">
         ← Voltar para obras
       </Link>
+
+      {sucessoMsg && (
+        <p className="mb-4 rounded border border-brand-green-light bg-brand-green-bg px-3 py-2 text-sm text-brand-green-dark">
+          {sucessoMsg}
+        </p>
+      )}
 
       <div className="mb-6 rounded-lg border bg-white p-6 shadow-sm">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -663,7 +689,10 @@ export default function ObraDetailPage() {
           <tbody>
             {operacoes?.results.map((op) => {
               const naoPaga = op.tipo === "despesa" && !op.pago;
-              const alertaVencimento = naoPaga ? getAlertaVencimento(op.data) : null;
+              // parcela_num basta — notas antigas sempre têm os dois, mas evita falso negativo
+              const ehParcela = op.parcela_num != null && op.parcela_num > 0;
+              const alertaVencimento =
+                naoPaga && ehParcela ? getAlertaVencimento(op.data) : null;
               const devolucao = op.devolucao_investimento;
               const precoUnitario =
                 op.quantidade && parseNum(op.quantidade) > 0
@@ -672,7 +701,8 @@ export default function ObraDetailPage() {
               const rowBg =
                 alertaVencimento === "vencida"
                   ? "bg-red-50"
-                  : alertaVencimento === "vence_amanha"
+                  : alertaVencimento === "vence_hoje" ||
+                      alertaVencimento === "vence_amanha"
                     ? "bg-orange-50"
                     : naoPaga
                       ? "bg-amber-50"
@@ -717,6 +747,10 @@ export default function ObraDetailPage() {
                         alertaVencimento === "vencida" ? (
                           <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
                             ● {devolucao ? "Devolução vencida" : "Vencida"}
+                          </span>
+                        ) : alertaVencimento === "vence_hoje" ? (
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                            ● {devolucao ? "Devolução vence hoje" : "Vence hoje"}
                           </span>
                         ) : alertaVencimento === "vence_amanha" ? (
                           <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
@@ -928,7 +962,13 @@ export default function ObraDetailPage() {
           event.preventDefault();
           setEditingOperacao(null);
         }}
-        className="w-[min(48rem,calc(100%-2rem))] rounded-lg p-0 shadow-xl backdrop:bg-black/40"
+        onWheel={(event) => {
+          // Evita scroll da listagem atrás do modal
+          const target = event.target as HTMLElement;
+          const scrollable = target.closest("[data-scrollable], .overflow-y-auto, .overflow-auto");
+          if (!scrollable) event.preventDefault();
+        }}
+        className="w-[min(48rem,calc(100%-2rem))] overflow-visible rounded-lg p-0 shadow-xl backdrop:bg-black/40"
         aria-labelledby="editar-operacao-titulo"
       >
         <div className="p-5">

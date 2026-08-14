@@ -279,6 +279,7 @@ class OperacaoSerializer(serializers.ModelSerializer):
     descricao = serializers.CharField(
         max_length=DESCRICAO_MAX_LENGTH, required=False, allow_blank=True
     )
+    data_compra = serializers.SerializerMethodField()
 
     class Meta:
         model = Operacao
@@ -303,9 +304,44 @@ class OperacaoSerializer(serializers.ModelSerializer):
             "parcela_num",
             "parcela_total",
             "grupo_parcela",
+            "data_compra",
             "criado_em",
         ]
-        read_only_fields = ["tipo", "obra", "grupo_parcela"]
+        read_only_fields = ["tipo", "obra", "grupo_parcela", "data_compra"]
+
+    def get_data_compra(self, obj: Operacao):
+        """Data da 1ª parcela (data da compra) para operações parceladas."""
+        if not obj.parcela_num:
+            return None
+        if obj.parcela_num == 1:
+            return obj.data
+        if obj.grupo_parcela:
+            primeira = (
+                Operacao.objects.filter(
+                    grupo_parcela=obj.grupo_parcela, parcela_num=1
+                )
+                .only("data")
+                .first()
+            )
+            if primeira:
+                return primeira.data
+        # Fallback notas antigas sem grupo_parcela
+        if obj.parcela_total:
+            primeira = (
+                Operacao.objects.filter(
+                    obra_id=obj.obra_id,
+                    parcela_total=obj.parcela_total,
+                    parcela_num=1,
+                    categoria_id=obj.categoria_id,
+                    fornecedor_id=obj.fornecedor_id,
+                    descricao=obj.descricao,
+                )
+                .only("data")
+                .first()
+            )
+            if primeira:
+                return primeira.data
+        return None
 
     def validate_categoria(self, categoria: Categoria) -> Categoria:
         if not categoria.ativa:

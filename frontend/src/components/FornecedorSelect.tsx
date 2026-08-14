@@ -1,4 +1,4 @@
-import FieldLabel from "./FieldLabel";
+import SearchableSelect from "./SearchableSelect";
 import type { Fornecedor } from "../types";
 
 interface FornecedorSelectProps {
@@ -18,24 +18,23 @@ export default function FornecedorSelect({
   className = "w-full rounded border px-3 py-2",
   id = "op-fornecedor",
   label = "Fornecedor",
-  placeholder = "Sem fornecedor",
+  placeholder = "Buscar fornecedor…",
 }: FornecedorSelectProps) {
   return (
-    <div>
-      <FieldLabel htmlFor={id} label={label} optional />
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={className}
-      >
-        <option value="">{placeholder}</option>
-        {fornecedores.map((f) => (
-          <option key={f.id} value={f.id}>
-            {f.nome}
-          </option>
-        ))}
-      </select>
-    </div>
+    <SearchableSelect
+      id={id}
+      label={label}
+      optional
+      value={value}
+      onChange={onChange}
+      options={fornecedores.map((f) => ({
+        value: f.id,
+        label: f.nome,
+      }))}
+      className={className}
+      placeholder={placeholder}
+      emptyLabel="Sem fornecedor"
+      allowEmpty
+    />
   );
 }

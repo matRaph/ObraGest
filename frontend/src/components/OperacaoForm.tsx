@@ -6,6 +6,7 @@ import FieldLabel from "./FieldLabel";
 import FornecedorSelect from "./FornecedorSelect";
 import { DESCRICAO_MAX_LENGTH, limitText } from "../constants/limits";
 import { parseCurrencyToNumber } from "../utils/currency";
+import { getTodayIso } from "../utils/dates";
 import type { Categoria, Fornecedor, Operacao } from "../types";
 
 export interface OperacaoFormData {
@@ -29,7 +30,7 @@ export function createEmptyOperacaoForm(): OperacaoFormData {
     valor: "",
     precoUnitario: "",
     quantidade: "",
-    data: new Date().toISOString().slice(0, 10),
+    data: getTodayIso(),
     descricao: "",
     pago: true,
     tambem_investimento: false,
@@ -124,6 +125,7 @@ export default function OperacaoForm({
     >
       <div className="grid gap-3 md:grid-cols-2">
         <CategoriaSelect
+          id={`${idPrefix}-categoria`}
           value={form.categoria}
           onChange={(categoria) => {
             const selecionada = categorias.find((item) => item.id === categoria);
@@ -141,6 +143,7 @@ export default function OperacaoForm({
           categorias={categorias}
         />
         <SubcategoriaSelect
+          id={`${idPrefix}-subcategoria`}
           value={form.subcategoria}
           onChange={(subcategoria) => onChange({ ...form, subcategoria })}
           subcategorias={selectedCategoria?.subcategorias ?? []}
@@ -148,6 +151,7 @@ export default function OperacaoForm({
         />
         {!ocultarFornecedor && (
           <FornecedorSelect
+            id={`${idPrefix}-fornecedor`}
             value={form.fornecedor}
             onChange={(fornecedor) => onChange({ ...form, fornecedor })}
             fornecedores={fornecedores}
