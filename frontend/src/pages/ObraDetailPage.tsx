@@ -42,6 +42,37 @@ function getAlertaVencimento(dataIso: string): "vencida" | "vence_hoje" | "vence
   return null;
 }
 
+function SortHeader({
+  label,
+  active,
+  direction,
+  align = "left",
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  direction: "asc" | "desc";
+  align?: "left" | "right";
+  onClick: () => void;
+}) {
+  return (
+    <th className={`px-4 py-3 ${align === "right" ? "text-right" : ""}`}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex items-center gap-1 font-semibold hover:text-brand-blue ${
+          active ? "text-brand-gray" : "text-brand-gray-muted"
+        }`}
+      >
+        {label}
+        <span className="text-[10px] leading-none" aria-hidden>
+          {active ? (direction === "desc" ? "▼" : "▲") : "↕"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 const tipoValorClasses: Record<TipoOperacao, string> = {
   receita: "text-brand-green",
   despesa: "text-red-600",
@@ -109,6 +140,7 @@ export default function ObraDetailPage() {
   const [filtroDescricao, setFiltroDescricao] = useState("");
   const [descricaoDebounced, setDescricaoDebounced] = useState("");
   const [filtroPago, setFiltroPago] = useState("");
+  const [ordering, setOrdering] = useState("prioridade");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
   const [exportando, setExportando] = useState(false);
@@ -153,10 +185,11 @@ export default function ObraDetailPage() {
   const listParams = useMemo(
     () => ({
       ...filterParams,
+      ordering,
       page: String(page),
       page_size: String(pageSize),
     }),
-    [filterParams, page, pageSize]
+    [filterParams, ordering, page, pageSize]
   );
 
   const { data: operacoes } = useQuery({
@@ -184,7 +217,7 @@ export default function ObraDetailPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterParams, pageSize]);
+  }, [filterParams, pageSize, ordering]);
 
   useEffect(() => {
     const dialog = editDialogRef.current;
@@ -255,6 +288,7 @@ export default function ObraDetailPage() {
       // Busca todas as operações (com filtros ativos, sem paginação)
       const todasOperacoes = await operacoesApi.listByObra(id, {
         ...filterParams,
+        ordering,
         page_size: "10000",
       });
       exportarObra(obra, todasOperacoes.results);
@@ -332,7 +366,7 @@ export default function ObraDetailPage() {
         subcategoria: notaForm.subcategoria || undefined,
         fornecedor: notaForm.fornecedor || undefined,
         num_parcelas: notaForm.num_parcelas,
-        data_primeira_parcela: notaForm.data_primeira_parcela,
+        data_compra: notaForm.data_compra,
         tambem_investimento: notaForm.tambem_investimento,
         descricao: notaForm.descricao || undefined,
       }),
@@ -676,12 +710,28 @@ export default function ObraDetailPage() {
         <table className="w-full text-sm">
           <thead className="bg-brand-gray-light text-left">
             <tr>
-              <th className="px-4 py-3">Data</th>
+              <SortHeader
+                label="Data"
+                active={ordering === "data" || ordering === "-data"}
+                direction={ordering === "data" ? "asc" : "desc"}
+                onClick={() =>
+                  setOrdering(ordering === "-data" ? "data" : "-data")
+                }
+              />
               <th className="px-4 py-3">Categoria</th>
               <th className="px-4 py-3">Fornecedor</th>
               <th className="px-4 py-3">Descrição</th>
               <th className="px-4 py-3">Tipo</th>
-              <th className="px-4 py-3">Situação</th>
+              <SortHeader
+                label="Situação"
+                active={ordering === "prioridade" || ordering === "-prioridade"}
+                direction={ordering === "-prioridade" ? "asc" : "desc"}
+                onClick={() =>
+                  setOrdering(
+                    ordering === "prioridade" ? "-prioridade" : "prioridade"
+                  )
+                }
+              />
               <th className="px-4 py-3 text-right">Valor</th>
               <th className="px-4 py-3 text-right">Ações</th>
             </tr>

@@ -146,6 +146,7 @@ class Operacao(models.Model):
     parcela_num = models.PositiveSmallIntegerField(null=True, blank=True)
     parcela_total = models.PositiveSmallIntegerField(null=True, blank=True)
     grupo_parcela = models.UUIDField(null=True, blank=True, db_index=True)
+    data_compra = models.DateField(null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:

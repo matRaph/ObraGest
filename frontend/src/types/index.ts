@@ -64,7 +64,7 @@ export interface OperacaoLotePayload {
   subcategoria?: string;
   fornecedor?: string;
   num_parcelas: number;
-  data_primeira_parcela: string;
+  data_compra: string;
   tambem_investimento?: boolean;
   descricao?: string;
 }
@@ -90,7 +90,7 @@ export interface Operacao {
   parcela_num?: number | null;
   parcela_total?: number | null;
   grupo_parcela?: string | null;
-  /** Data da 1ª parcela (compra), quando for operação parcelada */
+  /** Data da compra, quando for operação parcelada */
   data_compra?: string | null;
   criado_em: string;
 }

@@ -12,7 +12,7 @@ export interface AgregadoNotaForm {
   categoria: string;
   subcategoria: string;
   fornecedor: string;
-  data_primeira_parcela: string;
+  data_compra: string;
   num_parcelas: number;
   tambem_investimento: boolean;
   descricao: string;
@@ -23,7 +23,7 @@ export function createEmptyNotaForm(): AgregadoNotaForm {
     categoria: "",
     subcategoria: "",
     fornecedor: "",
-    data_primeira_parcela: getTodayIso(),
+    data_compra: getTodayIso(),
     num_parcelas: 1,
     tambem_investimento: false,
     descricao: "",
@@ -76,7 +76,7 @@ export default function AgregadoPanel({
   const ehDevolucao = selectedCategoria?.devolucao_investimento ?? false;
 
   const errCategoria = tentouLancar && !notaForm.categoria;
-  const errData = tentouLancar && !notaForm.data_primeira_parcela;
+  const errData = tentouLancar && !notaForm.data_compra;
 
   return (
     <div className="mb-4 rounded-lg border-2 border-brand-blue/30 bg-brand-blue/5 p-4">
@@ -168,17 +168,17 @@ export default function AgregadoPanel({
           fornecedores={fornecedores}
         />
         <div>
-          <FieldLabel htmlFor="nota-data" label="Data da 1ª parcela" required />
+          <FieldLabel htmlFor="nota-data" label="Data da compra" required />
           <DateField
             id="nota-data"
             required
-            value={notaForm.data_primeira_parcela}
-            onChange={(data_primeira_parcela) =>
-              onNotaFormChange({ ...notaForm, data_primeira_parcela })
+            value={notaForm.data_compra}
+            onChange={(data_compra) =>
+              onNotaFormChange({ ...notaForm, data_compra })
             }
           />
           {errData && (
-            <p className="mt-0.5 text-xs text-red-500">Informe a data da primeira parcela.</p>
+            <p className="mt-0.5 text-xs text-red-500">Informe a data da compra.</p>
           )}
         </div>
         <div>
@@ -240,19 +240,19 @@ export default function AgregadoPanel({
       </div>
 
       <p className="mt-2 text-xs text-brand-gray-muted">
-        As parcelas serão lançadas como <strong>não pagas</strong>. As datas seguintes serão
-        calculadas automaticamente (+30 dias por parcela).
+        As parcelas serão lançadas como <strong>não pagas</strong>. A 1ª parcela vence{" "}
+        <strong>30 dias após a compra</strong>; as seguintes, a cada +30 dias.
       </p>
 
       <div className="mt-3 flex items-center justify-end gap-3">
-        {tentouLancar && (!notaForm.categoria || !notaForm.data_primeira_parcela) && (
+        {tentouLancar && (!notaForm.categoria || !notaForm.data_compra) && (
           <p className="text-xs text-red-500">Preencha os campos obrigatórios marcados com *</p>
         )}
         <button
           type="button"
           onClick={() => {
             setTentouLancar(true);
-            if (!notaForm.categoria || !notaForm.data_primeira_parcela || itens.length === 0) return;
+            if (!notaForm.categoria || !notaForm.data_compra || itens.length === 0) return;
             onLancar();
           }}
           disabled={isPending || itens.length === 0}

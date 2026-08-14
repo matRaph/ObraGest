@@ -214,17 +214,28 @@ class ObraViewSet(viewsets.ModelViewSet):
                         Q(parcela_num__isnull=False)
                         & Q(tipo=TipoOperacao.DESPESA)
                         & Q(pago=False)
-                        & Q(data__lte=amanha)
-                        & Q(data__gte=hoje),
+                        & Q(data=hoje),
                         then=Value(1),
                     ),
-                    default=Value(2),
+                    When(
+                        Q(parcela_num__isnull=False)
+                        & Q(tipo=TipoOperacao.DESPESA)
+                        & Q(pago=False)
+                        & Q(data=amanha),
+                        then=Value(2),
+                    ),
+                    When(
+                        Q(tipo=TipoOperacao.DESPESA) & Q(pago=False),
+                        then=Value(3),
+                    ),
+                    default=Value(4),
                     output_field=IntegerField(),
                 )
             )
 
             allowed = {
-                "prioridade": ("_prioridade", "-criado_em"),
+                "prioridade": ("_prioridade", "data", "-criado_em"),
+                "-prioridade": ("-_prioridade", "-data", "-criado_em"),
                 "data": ("data", "criado_em"),
                 "-data": ("-data", "-criado_em"),
                 "valor": ("valor", "-data", "-criado_em"),
@@ -232,12 +243,10 @@ class ObraViewSet(viewsets.ModelViewSet):
                 "-criado_em": ("-criado_em",),
             }
             if ordering == "prioridade":
-                # Vencidas / a vencer: data de vencimento crescente.
-                # Demais: empata na data sentinela e ordena por criado_em desc.
                 qs = qs.order_by(
                     "_prioridade",
                     Case(
-                        When(_prioridade__lt=2, then=F("data")),
+                        When(_prioridade__lt=4, then=F("data")),
                         default=Value(date(9999, 12, 31)),
                         output_field=DateField(),
                     ),
@@ -245,7 +254,7 @@ class ObraViewSet(viewsets.ModelViewSet):
                 )
             else:
                 qs = qs.order_by(
-                    *allowed.get(ordering, ("_prioridade", "-criado_em"))
+                    *allowed.get(ordering, ("_prioridade", "data", "-criado_em"))
                 )
 
             page = self.paginate_queryset(qs)
@@ -274,7 +283,9 @@ class ObraViewSet(viewsets.ModelViewSet):
         subcategoria_id = request.data.get("subcategoria") or None
         fornecedor_id = request.data.get("fornecedor") or None
         num_parcelas = request.data.get("num_parcelas")
-        data_primeira_str = request.data.get("data_primeira_parcela")
+        data_compra_str = request.data.get("data_compra") or request.data.get(
+            "data_primeira_parcela"
+        )
         tambem_investimento = bool(request.data.get("tambem_investimento", False))
         descricao_payload = str(request.data.get("descricao", "")).strip()
 
@@ -284,9 +295,9 @@ class ObraViewSet(viewsets.ModelViewSet):
                 {"categoria": "Informe a categoria da nota."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if not data_primeira_str:
+        if not data_compra_str:
             return Response(
-                {"data_primeira_parcela": "Informe a data da primeira parcela."},
+                {"data_compra": "Informe a data da compra."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
@@ -348,10 +359,10 @@ class ObraViewSet(viewsets.ModelViewSet):
                 )
 
         try:
-            data_primeira = date.fromisoformat(data_primeira_str)
+            data_compra = date.fromisoformat(data_compra_str)
         except ValueError:
             return Response(
-                {"data_primeira_parcela": "Data inválida. Use o formato AAAA-MM-DD."},
+                {"data_compra": "Data inválida. Use o formato AAAA-MM-DD."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -379,7 +390,8 @@ class ObraViewSet(viewsets.ModelViewSet):
         grupo_parcela = uuid.uuid4()
         criadas = []
         for i in range(num_parcelas):
-            data_parcela = data_primeira + timedelta(days=30 * i)
+            # 1ª parcela = compra + 30 dias; demais +30 a cada parcela
+            data_parcela = data_compra + timedelta(days=30 * (i + 1))
             valor = valor_ultima if i == num_parcelas - 1 else valor_parcela
             op = Operacao(
                 obra=obra,
@@ -399,6 +411,7 @@ class ObraViewSet(viewsets.ModelViewSet):
                 parcela_num=i + 1,
                 parcela_total=num_parcelas,
                 grupo_parcela=grupo_parcela,
+                data_compra=data_compra,
             )
             op.save()
             criadas.append(op)
