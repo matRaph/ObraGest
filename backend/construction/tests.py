@@ -432,3 +432,45 @@ class ObraOperacaoApiTests(TestCase):
         )
         self.assertEqual(rejeitada.status_code, 400)
         self.assertIn("tambem_investimento", rejeitada.data)
+
+
+class ExportApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.categoria = Categoria.objects.create(
+            nome="Materiais",
+            tipo=TipoOperacao.DESPESA,
+        )
+        self.obra = Obra.objects.create(nome="Obra Teste", cidade="Recife")
+        Operacao.objects.create(
+            obra=self.obra,
+            categoria=self.categoria,
+            valor=Decimal("150.00"),
+            data=date(2026, 7, 1),
+            tipo=TipoOperacao.DESPESA,
+            descricao="Compra de cimento",
+        )
+
+    def test_export_obra_retorna_csv_com_virgula(self):
+        url = reverse("obra-export", args=[self.obra.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn("attachment", response["Content-Disposition"])
+        content = response.content.decode("utf-8-sig")
+        self.assertIn("RELATÓRIO DA OBRA", content)
+        self.assertIn("Compra de cimento", content)
+        self.assertIn('"150,00"', content)
+        self.assertNotIn(";", content.splitlines()[0])
+
+    def test_export_dashboard_retorna_csv(self):
+        response = self.client.get(
+            reverse("dashboard-export"),
+            {"data_inicio": "2026-01-01", "data_fim": "2026-12-31"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        content = response.content.decode("utf-8-sig")
+        self.assertIn("RELATÓRIO DE DASHBOARD", content)
+        self.assertIn("Obra Teste", content)
+

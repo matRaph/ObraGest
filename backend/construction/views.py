@@ -40,10 +40,118 @@ from .services.backup import (
     restore_backup,
     restore_backup_file,
 )
+from .services.dashboard import compute_dashboard_data
+from .services.export import build_dashboard_export, build_obra_export, csv_file_response
 from .services import google_drive
 
 
 logger = logging.getLogger(__name__)
+
+
+def build_operacoes_queryset(obra: Obra, query_params):
+    qs = obra.operacoes.select_related("categoria", "subcategoria", "fornecedor")
+    tipo = query_params.get("tipo")
+    categoria = query_params.get("categoria")
+    subcategoria = query_params.get("subcategoria")
+    fornecedor = query_params.get("fornecedor")
+    descricao = query_params.get("descricao", "").strip()
+    pago = query_params.get("pago")
+    data_inicio = query_params.get("data_inicio")
+    data_fim = query_params.get("data_fim")
+    ordering = query_params.get("ordering", "prioridade")
+
+    if tipo == TipoOperacao.INVESTIMENTO:
+        qs = qs.filter(
+            tipo=TipoOperacao.INVESTIMENTO,
+            categoria__devolucao_investimento=False,
+        )
+    elif tipo == "despesa_investimento":
+        qs = qs.filter(
+            tipo=TipoOperacao.DESPESA,
+            tambem_investimento=True,
+            categoria__devolucao_investimento=False,
+        )
+    elif tipo == TipoOperacao.DESPESA:
+        qs = qs.filter(
+            tipo=TipoOperacao.DESPESA,
+            tambem_investimento=False,
+            categoria__devolucao_investimento=False,
+        )
+    elif tipo == "devolucao":
+        qs = qs.filter(categoria__devolucao_investimento=True)
+    elif tipo == TipoOperacao.RECEITA:
+        qs = qs.filter(tipo=tipo)
+    if categoria:
+        qs = qs.filter(categoria_id=categoria)
+    if subcategoria:
+        qs = qs.filter(subcategoria_id=subcategoria)
+    if fornecedor:
+        qs = qs.filter(fornecedor_id=fornecedor)
+    if descricao:
+        qs = qs.filter(descricao__icontains=descricao)
+    if pago in ("true", "false"):
+        qs = qs.filter(pago=(pago == "true"))
+    if data_inicio:
+        qs = qs.filter(data__gte=data_inicio)
+    if data_fim:
+        qs = qs.filter(data__lte=data_fim)
+
+    hoje = date.today()
+    amanha = hoje + timedelta(days=1)
+    qs = qs.annotate(
+        _prioridade=Case(
+            When(
+                Q(parcela_num__isnull=False)
+                & Q(tipo=TipoOperacao.DESPESA)
+                & Q(pago=False)
+                & Q(data__lt=hoje),
+                then=Value(0),
+            ),
+            When(
+                Q(parcela_num__isnull=False)
+                & Q(tipo=TipoOperacao.DESPESA)
+                & Q(pago=False)
+                & Q(data=hoje),
+                then=Value(1),
+            ),
+            When(
+                Q(parcela_num__isnull=False)
+                & Q(tipo=TipoOperacao.DESPESA)
+                & Q(pago=False)
+                & Q(data=amanha),
+                then=Value(2),
+            ),
+            When(
+                Q(tipo=TipoOperacao.DESPESA) & Q(pago=False),
+                then=Value(3),
+            ),
+            default=Value(4),
+            output_field=IntegerField(),
+        )
+    )
+
+    allowed = {
+        "prioridade": ("_prioridade", "data", "-criado_em"),
+        "-prioridade": ("-_prioridade", "-data", "-criado_em"),
+        "data": ("data", "criado_em"),
+        "-data": ("-data", "-criado_em"),
+        "valor": ("valor", "-data", "-criado_em"),
+        "-valor": ("-valor", "-data", "-criado_em"),
+        "-criado_em": ("-criado_em",),
+    }
+    if ordering == "prioridade":
+        qs = qs.order_by(
+            "_prioridade",
+            Case(
+                When(_prioridade__lt=4, then=F("data")),
+                default=Value(date(9999, 12, 31)),
+                output_field=DateField(),
+            ),
+            F("criado_em").desc(),
+        )
+    else:
+        qs = qs.order_by(*allowed.get(ordering, ("_prioridade", "data", "-criado_em")))
+    return qs
 
 
 class FornecedorViewSet(viewsets.ModelViewSet):
@@ -152,110 +260,7 @@ class ObraViewSet(viewsets.ModelViewSet):
         obra = self.get_object()
 
         if request.method == "GET":
-            qs = obra.operacoes.select_related("categoria", "subcategoria", "fornecedor")
-            tipo = request.query_params.get("tipo")
-            categoria = request.query_params.get("categoria")
-            subcategoria = request.query_params.get("subcategoria")
-            fornecedor = request.query_params.get("fornecedor")
-            descricao = request.query_params.get("descricao", "").strip()
-            pago = request.query_params.get("pago")
-            data_inicio = request.query_params.get("data_inicio")
-            data_fim = request.query_params.get("data_fim")
-            ordering = request.query_params.get("ordering", "prioridade")
-
-            if tipo == TipoOperacao.INVESTIMENTO:
-                qs = qs.filter(
-                    tipo=TipoOperacao.INVESTIMENTO,
-                    categoria__devolucao_investimento=False,
-                )
-            elif tipo == "despesa_investimento":
-                qs = qs.filter(
-                    tipo=TipoOperacao.DESPESA,
-                    tambem_investimento=True,
-                    categoria__devolucao_investimento=False,
-                )
-            elif tipo == TipoOperacao.DESPESA:
-                qs = qs.filter(
-                    tipo=TipoOperacao.DESPESA,
-                    tambem_investimento=False,
-                    categoria__devolucao_investimento=False,
-                )
-            elif tipo == "devolucao":
-                qs = qs.filter(categoria__devolucao_investimento=True)
-            elif tipo == TipoOperacao.RECEITA:
-                qs = qs.filter(tipo=tipo)
-            if categoria:
-                qs = qs.filter(categoria_id=categoria)
-            if subcategoria:
-                qs = qs.filter(subcategoria_id=subcategoria)
-            if fornecedor:
-                qs = qs.filter(fornecedor_id=fornecedor)
-            if descricao:
-                qs = qs.filter(descricao__icontains=descricao)
-            if pago in ("true", "false"):
-                qs = qs.filter(pago=(pago == "true"))
-            if data_inicio:
-                qs = qs.filter(data__gte=data_inicio)
-            if data_fim:
-                qs = qs.filter(data__lte=data_fim)
-
-            hoje = date.today()
-            amanha = hoje + timedelta(days=1)
-            qs = qs.annotate(
-                _prioridade=Case(
-                    When(
-                        Q(parcela_num__isnull=False)
-                        & Q(tipo=TipoOperacao.DESPESA)
-                        & Q(pago=False)
-                        & Q(data__lt=hoje),
-                        then=Value(0),
-                    ),
-                    When(
-                        Q(parcela_num__isnull=False)
-                        & Q(tipo=TipoOperacao.DESPESA)
-                        & Q(pago=False)
-                        & Q(data=hoje),
-                        then=Value(1),
-                    ),
-                    When(
-                        Q(parcela_num__isnull=False)
-                        & Q(tipo=TipoOperacao.DESPESA)
-                        & Q(pago=False)
-                        & Q(data=amanha),
-                        then=Value(2),
-                    ),
-                    When(
-                        Q(tipo=TipoOperacao.DESPESA) & Q(pago=False),
-                        then=Value(3),
-                    ),
-                    default=Value(4),
-                    output_field=IntegerField(),
-                )
-            )
-
-            allowed = {
-                "prioridade": ("_prioridade", "data", "-criado_em"),
-                "-prioridade": ("-_prioridade", "-data", "-criado_em"),
-                "data": ("data", "criado_em"),
-                "-data": ("-data", "-criado_em"),
-                "valor": ("valor", "-data", "-criado_em"),
-                "-valor": ("-valor", "-data", "-criado_em"),
-                "-criado_em": ("-criado_em",),
-            }
-            if ordering == "prioridade":
-                qs = qs.order_by(
-                    "_prioridade",
-                    Case(
-                        When(_prioridade__lt=4, then=F("data")),
-                        default=Value(date(9999, 12, 31)),
-                        output_field=DateField(),
-                    ),
-                    F("criado_em").desc(),
-                )
-            else:
-                qs = qs.order_by(
-                    *allowed.get(ordering, ("_prioridade", "data", "-criado_em"))
-                )
+            qs = build_operacoes_queryset(obra, request.query_params)
 
             page = self.paginate_queryset(qs)
             serializer = OperacaoSerializer(page or qs, many=True)
@@ -267,6 +272,13 @@ class ObraViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save(obra=obra)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"])
+    def export(self, request, pk=None):
+        obra = self.get_object()
+        operacoes = list(build_operacoes_queryset(obra, request.query_params))
+        filename, content = build_obra_export(obra, operacoes)
+        return csv_file_response(filename, content)
 
     @action(detail=True, methods=["post"], url_path="operacoes/lote")
     def operacoes_lote(self, request, pk=None):
@@ -494,148 +506,35 @@ class OperacaoViewSet(viewsets.ModelViewSet):
 
 class DashboardView(APIView):
     def get(self, request):
-        data_inicio = request.query_params.get("data_inicio")
-        data_fim = request.query_params.get("data_fim")
-        obra_id = request.query_params.get("obra")
-
-        operacoes = Operacao.objects.select_related("obra", "categoria", "subcategoria")
-        if obra_id:
-            operacoes = operacoes.filter(obra_id=obra_id)
-        if data_inicio:
-            operacoes = operacoes.filter(data__gte=data_inicio)
-        if data_fim:
-            operacoes = operacoes.filter(data__lte=data_fim)
-
-        total_receitas = Decimal("0")
-        total_despesas = Decimal("0")
-        total_despesas_pendentes = Decimal("0")
-        total_investimentos = Decimal("0")
-        total_devolucoes_investimento = Decimal("0")
-        total_devolucoes_pendentes = Decimal("0")
-        por_obra: dict = {}
-        por_cidade: dict = {}
-        por_categoria: dict = {}
-
-        def _delta(op) -> Decimal:
-            if op.tipo == TipoOperacao.RECEITA:
-                return op.valor
-            if op.tipo == TipoOperacao.DESPESA and op.pago:
-                return -op.valor
-            return Decimal("0")
-
-        def _somar_categoria(op, tipo_visao: str) -> None:
-            cat_key = f"{op.categoria_id}:{tipo_visao}"
-            if cat_key not in por_categoria:
-                por_categoria[cat_key] = {
-                    "categoria_id": op.categoria_id,
-                    "nome": op.categoria.nome,
-                    "tipo": tipo_visao,
-                    "total": Decimal("0"),
-                    "_subs": {},
-                }
-            entry = por_categoria[cat_key]
-            entry["total"] += op.valor
-
-            sub_key = (
-                str(op.subcategoria_id) if op.subcategoria_id else "__none__"
-            )
-            sub_nome = (
-                op.subcategoria.nome if op.subcategoria_id else "Sem subcategoria"
-            )
-            if sub_key not in entry["_subs"]:
-                entry["_subs"][sub_key] = {
-                    "subcategoria_id": op.subcategoria_id,
-                    "nome": sub_nome,
-                    "total": Decimal("0"),
-                }
-            entry["_subs"][sub_key]["total"] += op.valor
-
-        for op in operacoes:
-            if op.contabiliza_como_devolucao_investimento:
-                total_devolucoes_investimento += op.valor
-                if not op.pago:
-                    total_devolucoes_pendentes += op.valor
-                continue
-
-            delta = _delta(op)
-            if op.tipo == TipoOperacao.RECEITA:
-                total_receitas += op.valor
-            elif op.tipo == TipoOperacao.DESPESA:
-                if op.pago:
-                    total_despesas += op.valor
-                else:
-                    total_despesas_pendentes += op.valor
-            if op.contabiliza_como_investimento:
-                total_investimentos += op.valor
-
-            obra_key = str(op.obra_id)
-            if obra_key not in por_obra:
-                por_obra[obra_key] = {
-                    "obra_id": op.obra_id,
-                    "nome": op.obra.nome,
-                    "cidade": op.obra.cidade,
-                    "receitas": Decimal("0"),
-                    "despesas": Decimal("0"),
-                    "investimentos": Decimal("0"),
-                    "saldo": Decimal("0"),
-                }
-            cidade = op.obra.cidade
-            if cidade not in por_cidade:
-                por_cidade[cidade] = {
-                    "cidade": cidade,
-                    "receitas": Decimal("0"),
-                    "despesas": Decimal("0"),
-                    "investimentos": Decimal("0"),
-                    "saldo": Decimal("0"),
-                }
-
-            for bucket in (por_obra[obra_key], por_cidade[cidade]):
-                if op.tipo == TipoOperacao.RECEITA:
-                    bucket["receitas"] += op.valor
-                elif op.tipo == TipoOperacao.DESPESA and op.pago:
-                    bucket["despesas"] += op.valor
-                if op.contabiliza_como_investimento:
-                    bucket["investimentos"] += op.valor
-                bucket["saldo"] += delta
-
-            _somar_categoria(op, op.tipo)
-            if (
-                op.tipo == TipoOperacao.DESPESA
-                and op.tambem_investimento
-                and op.pago
-            ):
-                _somar_categoria(op, TipoOperacao.INVESTIMENTO)
-
-        categorias = []
-        for entry in sorted(
-            por_categoria.values(),
-            key=lambda x: (
-                {TipoOperacao.DESPESA: 0, TipoOperacao.RECEITA: 1}.get(x["tipo"], 2),
-                x["nome"],
-            ),
-        ):
-            subs = sorted(
-                entry.pop("_subs").values(),
-                key=lambda s: s["total"],
-                reverse=True,
-            )
-            entry["subcategorias"] = subs
-            categorias.append(entry)
-
         return Response(
-            {
-                "total_receitas": total_receitas,
-                "total_despesas": total_despesas,
-                "total_despesas_pendentes": total_despesas_pendentes,
-                "total_investimentos": total_investimentos,
-                "total_devolucoes_investimento": total_devolucoes_investimento,
-                "total_devolucoes_pendentes": total_devolucoes_pendentes,
-                "saldo": total_receitas - total_despesas,
-                "por_obra": list(por_obra.values()),
-                "por_cidade": list(por_cidade.values()),
-                "por_categoria": categorias,
-            }
+            compute_dashboard_data(
+                data_inicio=request.query_params.get("data_inicio"),
+                data_fim=request.query_params.get("data_fim"),
+                obra_id=request.query_params.get("obra"),
+            )
         )
+
+
+class DashboardExportView(APIView):
+    def get(self, request):
+        obra_id = request.query_params.get("obra")
+        obra_nome = None
+        if obra_id:
+            obra = Obra.objects.filter(pk=obra_id).only("nome").first()
+            if obra is None:
+                return Response(
+                    {"error": "Obra não encontrada."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            obra_nome = obra.nome
+
+        filename, content = build_dashboard_export(
+            data_inicio=request.query_params.get("data_inicio"),
+            data_fim=request.query_params.get("data_fim"),
+            obra_id=obra_id,
+            obra_nome=obra_nome,
+        )
+        return csv_file_response(filename, content)
 
 
 class HealthView(APIView):

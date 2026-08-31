@@ -11,7 +11,6 @@ import {
   statusLabels,
   tipoLabels,
 } from "../api/client";
-import { exportarObra } from "../utils/export";
 import ObraForm, { emptyObraForm, obraToForm, type ObraFormData } from "../components/ObraForm";
 import OperacaoForm, {
   createEmptyOperacaoForm,
@@ -285,13 +284,7 @@ export default function ObraDetailPage() {
     if (!obra || !id) return;
     setExportando(true);
     try {
-      // Busca todas as operações (com filtros ativos, sem paginação)
-      const todasOperacoes = await operacoesApi.listByObra(id, {
-        ...filterParams,
-        ordering,
-        page_size: "10000",
-      });
-      exportarObra(obra, todasOperacoes.results);
+      await obrasApi.export(id, { ...filterParams, ordering });
     } finally {
       setExportando(false);
     }

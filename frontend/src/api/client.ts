@@ -10,6 +10,7 @@ import type {
   OperacaoLotePayload,
   PaginatedResponse,
 } from "../types";
+import { downloadApiExport } from "../utils/export";
 
 const api = axios.create({
   baseURL: "/api",
@@ -25,6 +26,8 @@ export const obrasApi = {
     api.patch<Obra>(`/obras/${id}/`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/obras/${id}/`),
   cidades: () => api.get<string[]>("/obras/cidades/").then((r) => r.data),
+  export: (id: string, params?: Record<string, string>) =>
+    downloadApiExport(`/obras/${id}/export/`, params),
 };
 
 export const operacoesApi = {
@@ -75,6 +78,8 @@ export const fornecedoresApi = {
 export const dashboardApi = {
   get: (params?: Record<string, string>) =>
     api.get<DashboardData>("/dashboard/", { params }).then((r) => r.data),
+  export: (params?: Record<string, string>) =>
+    downloadApiExport("/dashboard/export/", params),
 };
 
 export const backupApi = {

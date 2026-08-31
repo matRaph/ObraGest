@@ -21,7 +21,6 @@ import {
   obrasApi,
   tipoPluralLabels,
 } from "../api/client";
-import { exportarDashboard } from "../utils/export";
 import {
   getCurrentMonthRange,
   getObraDashboardRange,
@@ -116,6 +115,7 @@ export default function DashboardPage() {
     obraParam ? "desde_inicio" : "mes_atual"
   );
   const [tipoGrafico, setTipoGrafico] = useState<TipoOperacao>("despesa");
+  const [exportando, setExportando] = useState(false);
 
   const params: Record<string, string> = {
     data_inicio: dataInicio,
@@ -250,13 +250,14 @@ export default function DashboardPage() {
     setSearchParams(next);
   }
 
-  function handleExportar() {
-    if (!data) return;
-    exportarDashboard(data, {
-      obraNome: obraSelecionada?.nome,
-      dataInicio,
-      dataFim,
-    });
+  async function handleExportar() {
+    if (!dataInicio || !dataFim) return;
+    setExportando(true);
+    try {
+      await dashboardApi.export(params);
+    } finally {
+      setExportando(false);
+    }
   }
 
   return (
@@ -269,9 +270,10 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={handleExportar}
-            className="rounded border border-brand-green-light bg-brand-green-bg px-3 py-1.5 text-sm text-brand-green-dark hover:bg-brand-green-light"
+            disabled={exportando}
+            className="rounded border border-brand-green-light bg-brand-green-bg px-3 py-1.5 text-sm text-brand-green-dark hover:bg-brand-green-light disabled:opacity-60"
           >
-            Exportar relatório
+            {exportando ? "Exportando..." : "Exportar relatório"}
           </button>
         )}
       </div>
