@@ -158,8 +158,8 @@ export default function ObraDetailPage() {
   const categorias: Categoria[] = categoriasData?.results ?? [];
 
   const { data: fornecedoresData } = useQuery({
-    queryKey: ["fornecedores"],
-    queryFn: () => fornecedoresApi.list(),
+    queryKey: ["fornecedores", "options"],
+    queryFn: () => fornecedoresApi.list({ page_size: "10000" }),
   });
   const fornecedores: Fornecedor[] = fornecedoresData?.results ?? [];
 

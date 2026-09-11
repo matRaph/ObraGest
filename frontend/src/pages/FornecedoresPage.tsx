@@ -1,20 +1,42 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fornecedoresApi } from "../api/client";
 import FieldLabel from "../components/FieldLabel";
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 export default function FornecedoresPage() {
   const queryClient = useQueryClient();
   const [novoNome, setNovoNome] = useState("");
   const [editing, setEditing] = useState<{ id: string; nome: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
+
+  const listParams = {
+    page: String(page),
+    page_size: String(pageSize),
+  };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["fornecedores"],
-    queryFn: () => fornecedoresApi.list(),
+    queryKey: ["fornecedores", "list", listParams],
+    queryFn: () => fornecedoresApi.list(listParams),
   });
 
-  const fornecedores = (data?.results ?? []).sort((a, b) => a.nome.localeCompare(b.nome));
+  const fornecedores = data?.results ?? [];
+  const total = data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
+
+  useEffect(() => {
+    if (!data) return;
+    if (page > totalPages) setPage(totalPages);
+  }, [data, page, totalPages]);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["fornecedores"] });
@@ -110,79 +132,129 @@ export default function FornecedoresPage() {
 
       {isLoading ? (
         <p className="text-brand-gray-muted">Carregando...</p>
-      ) : fornecedores.length === 0 ? (
+      ) : total === 0 ? (
         <p className="text-sm text-brand-gray-muted">Nenhum fornecedor cadastrado.</p>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {fornecedores.map((forn) => {
-            const isEditing = editing?.id === forn.id;
-            return (
-              <div
-                key={forn.id}
-                className="rounded-lg border border-brand-gray-border bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  {isEditing ? (
-                    <form
-                      className="flex flex-1 gap-2"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (editing.nome.trim()) renameFornecedor.mutate(editing);
-                      }}
-                    >
-                      <input
-                        autoFocus
-                        value={editing.nome}
-                        maxLength={100}
-                        onChange={(e) => setEditing({ id: forn.id, nome: e.target.value })}
-                        className="flex-1 rounded border px-2 py-1 text-sm"
-                      />
-                      <button
-                        type="submit"
-                        className="rounded bg-brand-green px-3 py-1 text-xs text-white"
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            {fornecedores.map((forn) => {
+              const isEditing = editing?.id === forn.id;
+              return (
+                <div
+                  key={forn.id}
+                  className="rounded-lg border border-brand-gray-border bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    {isEditing ? (
+                      <form
+                        className="flex flex-1 gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (editing.nome.trim()) renameFornecedor.mutate(editing);
+                        }}
                       >
-                        Salvar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditing(null)}
-                        className="rounded border px-3 py-1 text-xs text-brand-gray"
-                      >
-                        Cancelar
-                      </button>
-                    </form>
-                  ) : (
-                    <>
-                      <span className="font-medium text-brand-gray">{forn.nome}</span>
-                      <div className="flex gap-2">
+                        <input
+                          autoFocus
+                          value={editing.nome}
+                          maxLength={100}
+                          onChange={(e) => setEditing({ id: forn.id, nome: e.target.value })}
+                          className="flex-1 rounded border px-2 py-1 text-sm"
+                        />
                         <button
-                          onClick={() => setEditing({ id: forn.id, nome: forn.nome })}
-                          className="text-xs text-brand-gray-muted hover:text-brand-gray"
+                          type="submit"
+                          className="rounded bg-brand-green px-3 py-1 text-xs text-white"
                         >
-                          Renomear
+                          Salvar
                         </button>
                         <button
-                          onClick={() => {
-                            if (
-                              confirm(
-                                `Excluir o fornecedor "${forn.nome}"? As operações existentes são mantidas.`
-                              )
-                            ) {
-                              deleteFornecedor.mutate(forn.id);
-                            }
-                          }}
-                          className="text-xs text-red-500 hover:text-red-700"
+                          type="button"
+                          onClick={() => setEditing(null)}
+                          className="rounded border px-3 py-1 text-xs text-brand-gray"
                         >
-                          Excluir
+                          Cancelar
                         </button>
-                      </div>
-                    </>
-                  )}
+                      </form>
+                    ) : (
+                      <>
+                        <span className="font-medium text-brand-gray">{forn.nome}</span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEditing({ id: forn.id, nome: forn.nome })}
+                            className="text-xs text-brand-gray-muted hover:text-brand-gray"
+                          >
+                            Renomear
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Excluir o fornecedor "${forn.nome}"? As operações existentes são mantidas.`
+                                )
+                              ) {
+                                deleteFornecedor.mutate(forn.id);
+                              }
+                            }}
+                            className="text-xs text-red-500 hover:text-red-700"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-brand-gray-muted">
+            <div className="flex flex-wrap items-center gap-3">
+              <p>
+                Mostrando {rangeStart}–{rangeEnd} de {total}
+              </p>
+              <label className="flex items-center gap-2">
+                <span>Por página</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) =>
+                    setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])
+                  }
+                  className="rounded border px-2 py-1.5 text-brand-gray"
+                  aria-label="Quantidade por página"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="rounded border px-3 py-1.5 text-brand-gray hover:bg-brand-gray-light disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Anterior
+                </button>
+                <span className="tabular-nums">
+                  Página {page} de {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="rounded border px-3 py-1.5 text-brand-gray hover:bg-brand-gray-light disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Próxima
+                </button>
               </div>
-            );
-          })}
-        </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

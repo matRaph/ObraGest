@@ -67,7 +67,8 @@ export const categoriasApi = {
 };
 
 export const fornecedoresApi = {
-  list: () => api.get<PaginatedResponse<Fornecedor>>("/fornecedores/").then((r) => r.data),
+  list: (params?: Record<string, string>) =>
+    api.get<PaginatedResponse<Fornecedor>>("/fornecedores/", { params }).then((r) => r.data),
   create: (data: { nome: string }) =>
     api.post<Fornecedor>("/fornecedores/", data).then((r) => r.data),
   update: (id: string, data: Partial<{ nome: string }>) =>
