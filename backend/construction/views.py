@@ -158,7 +158,11 @@ class FornecedorViewSet(viewsets.ModelViewSet):
     serializer_class = FornecedorSerializer
 
     def get_queryset(self):
-        return Fornecedor.objects.filter(ativa=True).order_by("nome")
+        qs = Fornecedor.objects.filter(ativa=True).order_by("nome")
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(nome__icontains=search)
+        return qs
 
     def perform_destroy(self, instance: Fornecedor):
         instance.ativa = False

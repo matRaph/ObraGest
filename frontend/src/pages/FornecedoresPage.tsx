@@ -8,6 +8,7 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 export default function FornecedoresPage() {
   const queryClient = useQueryClient();
   const [novoNome, setNovoNome] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
   const [editing, setEditing] = useState<{ id: string; nome: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -22,6 +23,25 @@ export default function FornecedoresPage() {
     queryKey: ["fornecedores", "list", listParams],
     queryFn: () => fornecedoresApi.list(listParams),
   });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchDebounced(novoNome.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [novoNome]);
+
+  const { data: sugestoesData } = useQuery({
+    queryKey: ["fornecedores", "search", searchDebounced],
+    queryFn: () =>
+      fornecedoresApi.list({ search: searchDebounced, page_size: "8" }),
+    enabled: searchDebounced.length >= 1,
+  });
+
+  const sugestoes = sugestoesData?.results ?? [];
+  const nomeNormalizado = novoNome.trim().toLowerCase();
+  const buscaAlinhada = searchDebounced.toLowerCase() === nomeNormalizado;
+  const nomeJaExiste =
+    buscaAlinhada &&
+    sugestoes.some((f) => f.nome.toLowerCase() === nomeNormalizado);
 
   const fornecedores = data?.results ?? [];
   const total = data?.count ?? 0;
@@ -59,6 +79,7 @@ export default function FornecedoresPage() {
     mutationFn: () => fornecedoresApi.create({ nome: novoNome.trim() }),
     onSuccess: () => {
       setNovoNome("");
+      setSearchDebounced("");
       setError(null);
       invalidate();
     },
@@ -96,26 +117,59 @@ export default function FornecedoresPage() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (novoNome.trim()) createFornecedor.mutate();
+          if (novoNome.trim() && !nomeJaExiste) createFornecedor.mutate();
         }}
         className="mb-6 rounded-lg border bg-white p-4 shadow-sm"
       >
         <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <div>
+          <div className="relative">
             <FieldLabel htmlFor="forn-nome" label="Novo fornecedor" />
             <input
               id="forn-nome"
               value={novoNome}
               maxLength={100}
               placeholder="Ex.: Materiais Silva"
-              onChange={(e) => setNovoNome(e.target.value)}
+              autoComplete="off"
+              aria-autocomplete="list"
+              aria-expanded={searchDebounced.length >= 1 && sugestoes.length > 0}
+              onChange={(e) => {
+                setNovoNome(e.target.value);
+                setError(null);
+              }}
               className="w-full rounded border px-3 py-2"
             />
+            {searchDebounced.length >= 1 && sugestoes.length > 0 && (
+              <div className="mt-2 rounded border border-brand-gray-border bg-brand-gray-light/40 px-3 py-2 text-sm">
+                <p className="mb-1.5 text-xs font-medium text-brand-gray-muted">
+                  {nomeJaExiste
+                    ? "Já existe um fornecedor com esse nome:"
+                    : "Fornecedores parecidos:"}
+                </p>
+                <ul className="space-y-1">
+                  {sugestoes.map((f) => {
+                    const exact = f.nome.toLowerCase() === nomeNormalizado;
+                    return (
+                      <li
+                        key={f.id}
+                        className={
+                          exact
+                            ? "font-medium text-brand-gray"
+                            : "text-brand-gray-muted"
+                        }
+                      >
+                        {f.nome}
+                        {exact ? " (já cadastrado)" : ""}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
           </div>
           <div className="flex items-end">
             <button
               type="submit"
-              disabled={createFornecedor.isPending}
+              disabled={createFornecedor.isPending || !novoNome.trim() || nomeJaExiste}
               className="rounded bg-brand-blue px-4 py-2 text-sm text-white hover:bg-brand-blue-dark disabled:opacity-50"
             >
               Adicionar
